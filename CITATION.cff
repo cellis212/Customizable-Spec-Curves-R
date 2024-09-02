@@ -1,0 +1,14 @@
+# nolint start: line_length_linter, trailing_whitespace_linter
+# nolint end
+
+cff-version: 1.2.0
+message: "If you use this code in your research, please cite the following source:"
+title: "Your Project Title"
+authors:
+  - family-names: "YourLastName"
+    given-names: "YourFirstName"
+date-released: "2024-07-12"
+url: "https://github.com/your-repo-link"
+identifiers:
+  - type: url
+    value: "https://github.com/your-repo-link"
