@@ -1,6 +1,6 @@
 # Specification Curve Analysis in R
 
-This repository contains modifiable (not canned) code based on the R package `specr` to create extremely flexible and visually appealing specification curves in R. The files are also structured to create multiple spec curves across different dependent variables in an efficient manner. The code is designed to be intuitive and extremely customizable, allowing you to adapt it to any of your specific project needs. The repository includes two main files:
+This repository contains modifiable (not canned) code based on the R package `specr` to create extremely flexible and visually appealing specification curves in R. The files are also structured to create multiple spec curves across different dependent variables in an efficient manner and to allow sampling of specifications when there are many potential options. The code is designed to be intuitive and extremely customizable, allowing you to adapt it to any of your specific project needs. The repository includes two main files:
 
 1. **Model Running File**: This file runs all the models. It requires significant customization based on your project, but it is structured in a way that makes it easy to adjust. AI coding models, such as Cursor, can assist in tailoring this file to your specific requirements. I find uploading your primary analysis file and then a list of the specifications you want to try gets you 90% of the way there. The included sample file lists options from Ellis, Takefumi, and Veith (2024).
 
