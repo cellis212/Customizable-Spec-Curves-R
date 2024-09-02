@@ -91,10 +91,11 @@ nOpt
 
 # Run the Models in Parallel ----------------------------------------------
 
+# Use this if you want to run all models
 ModList <- 1:nrow(Models)
+
+# Use this if you want to run a random sample of models (for when you have a large number of options)
 ModList <- c(1, sample(ModList, size = 10000, replace = FALSE))
-
-
 
 Models <- foreach(i = ModList, .combine = rbind, .packages = c("tidyverse", "fixest", "haven")) %dopar% {
   # Sample selection
