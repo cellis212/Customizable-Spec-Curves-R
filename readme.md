@@ -1,6 +1,6 @@
 # Specification Curve Analysis in R
 
-This repository contains modified code based on the R package `specr` to create extremely flexible and visually appealing specification curves in R. The code is designed to be intuitive and customizable, allowing you to adapt it to your specific project needs. The repository includes two main files:
+This repository contains modifiable (not canned) code based on the R package `specr` to create extremely flexible and visually appealing specification curves in R. The code is designed to be intuitive and customizable, allowing you to adapt it to your specific project needs. The repository includes two main files:
 
 1. **Model Running File**: This file runs all the models. It requires significant customization based on your project, but it is structured in a way that makes it easy to adjust. AI coding models, such as Cursor, can assist in tailoring this file to your specific requirements. I find uploading the main analysis file and then a list of the specifications you want to try is almost one-shot correct, but you should always test it to make sure. 
 
@@ -43,6 +43,3 @@ To get started with this code, follow these steps:
 
 This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
 
-## Acknowledgments
-
-We would like to thank the developers of the `fixest` and `ggplot2` packages for their invaluable tools that made this project possible.
