@@ -27,6 +27,7 @@ Please cite the following if you use this code in your research:
 
 - Simonsohn, U., Simmons, J.P. & Nelson, L.D. (2020). Specification curve analysis. Nature Human Behaviour, 4, 1208–1214. https://doi.org/10.1038/s41562-020-0912-z
 - Masur, Philipp K. & Scharkow, M. (2020). specr: Conducting and Visualizing Specification Curve Analyses. Available from https://CRAN.R-project.org/package=specr.
+- Ellis, C. (2024). Customizable Specification Curves in R [Computer software]. https://github.com/cellis212/Customizable-Spec-Curves-R
 
 ## Getting Started
 
