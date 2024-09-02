@@ -2,9 +2,9 @@
 
 This repository contains modifiable (not canned) code based on the R package `specr` to create extremely flexible and visually appealing specification curves in R. The code is designed to be intuitive and customizable, allowing you to adapt it to your specific project needs. The repository includes two main files:
 
-1. **Model Running File**: This file runs all the models. It requires significant customization based on your project, but it is structured in a way that makes it easy to adjust. AI coding models, such as Cursor, can assist in tailoring this file to your specific requirements. I find uploading your primary analysis file and then a list of the specifications you want to try gets you 90% of the way there.
+1. **Model Running File**: This file runs all the models. It requires significant customization based on your project, but it is structured in a way that makes it easy to adjust. AI coding models, such as Cursor, can assist in tailoring this file to your specific requirements. I find uploading your primary analysis file and then a list of the specifications you want to try gets you 90% of the way there. The included sample file lists options from Ellis, Takefumi, and Veith (2024).
 
-2. **Curve Printing File**: This file takes the outcomes from the model running file and prints the specification curves. It includes markers ("#### MANUAL CHANGE REQUIRED ####") to indicate where manual adjustments are necessary. AI coding models, such as Cursor, will also assist here and can typically one-shot this file when you also upload the model running file.
+2. **Curve Printing File**: This file takes the outcomes from the model running file and prints the specification curves. It includes markers ("#### MANUAL CHANGE REQUIRED ####") to indicate where manual adjustments are necessary. AI coding models, such as Cursor, will also assist here and can typically one-shot this file when you also upload the model running file. The included sample file lists options from Ellis, Takefumi, and Veith (2024).
 
 ## Sample Output Figures
 
@@ -35,8 +35,8 @@ To get started with this code, follow these steps:
 
 1. **Clone the Repository**: Clone this repository to your local machine using `git clone` or download the .zip. 
 2. **Install Required Packages**: Ensure that you have the necessary R packages installed. The required packages are loaded at the top of each script.
-3. **Customize the Model Running File**: Adjust the model running file to fit your specific project needs. This includes defining your data, model specifications, and any control variables.
-4. **Run the Model Running File**: Execute the model running file to generate the model outcomes.
+3. **Customize the Model Running File**: Adjust the model running file to fit your specific project needs. This includes defining your data, model specifications, subsets, etc. You can also define separate outputs (i.e. generate an elasticity, etc.).
+4. **Run the Model Running File**: Execute the model running file to generate the model outcomes. This will naturally run in parallel.
 5. **Customize the Curve Printing File**: Make any necessary manual adjustments to the curve printing file as indicated by the markers.
 6. **Generate Specification Curves**: Run the curve printing file to generate and save the specification curves.
 
