@@ -1,7 +1,41 @@
 {
-  "schema_version": 1,
+  "schema_version": 2,
   "applications": [
-    {"id": "application_1", "status": "not_selected", "manifest": null},
-    {"id": "application_2", "status": "not_selected", "manifest": null}
+    {
+      "id": "bll2010",
+      "manifest_version": "bll-v1",
+      "raw": "bll_2010/bbb.zip",
+      "input": "bll_2010/bll_input.csv",
+      "status": "selected_reproduced_frozen",
+      "specifications": 324,
+      "source": "Beck, Levine and Levkov (2010), Journal of Finance 65(5); data doi:10.34894/B1K9OU"
+    },
+    {
+      "id": "cz_am",
+      "manifest_version": "cz-am-v1",
+      "raw": "cz_2021",
+      "input": "cz_am/cz_am_input.csv",
+      "status": "selected_reproduced_frozen",
+      "specifications": 20,
+      "source": "Fama and French (1992) AM via Chen and Zimmermann (2022), Open Source Asset Pricing April 2021 release"
+    },
+    {
+      "id": "cz_bliq",
+      "manifest_version": "cz-bliq-v1",
+      "raw": "cz_2025",
+      "input": "cz_bliq/cz_bliq_input.csv",
+      "status": "selected_reproduced_frozen",
+      "specifications": 18,
+      "source": "Pastor and Stambaugh (2003) liquidity beta via Chen and Zimmermann (2022), October 2025 release; value-weighted original construction"
+    },
+    {
+      "id": "btmr2021",
+      "manifest_version": "btmr-v1",
+      "raw": "btmr_2021",
+      "input": "btmr2021/btmr_input.csv",
+      "status": "selected_reproduced_frozen",
+      "specifications": 240,
+      "source": "Bednarek, te Kaat, Ma and Rebucci (2021), Review of Financial Studies 34(10); data doi:10.7910/DVN/LQPRIA"
+    }
   ]
 }

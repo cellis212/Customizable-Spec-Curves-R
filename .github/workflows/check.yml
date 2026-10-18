@@ -17,12 +17,16 @@ jobs:
           r-version: '4.5.1'
           use-public-rspm: true
       - uses: r-lib/actions/setup-renv@v2
-      - name: Check publication policy and scientific invariants
-        run: make check
-      - name: Render the synthetic demonstration
-        run: make demo
-      - uses: quarto-dev/quarto-actions/setup@v2
+      - uses: actions/setup-python@v5
         with:
-          tinytex: true
-      - name: Compile manuscript source
-        run: make manuscript
+          python-version: '3.11'
+      - name: Install the Python port
+        run: python -m pip install -e python
+      - name: Check publication policy, R and Python workflow invariants
+        run: make check PYTHON=python
+      - name: Run the synthetic demonstration in R and Python and compare
+        run: |
+          make demo
+          run=$(ls -d local/output/synthetic-demo/*/ | tail -1)
+          python -m speccurve run paper/config/demo.json "$run/generated_input.csv" "$run/python" --no-plot
+          python tools/compare_implementations.py "$run/results.csv" "$run/python/results.csv"

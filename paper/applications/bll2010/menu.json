@@ -1,0 +1,383 @@
+{
+  "schema_version": 2,
+  "version": "bll-v1",
+  "analysis_kind": "application",
+  "estimator": "linear_fixed_effects",
+  "title": "Bank branch deregulation and income inequality (Beck, Levine and Levkov, 2010)",
+  "estimand": "Average change in state income inequality after intrastate branch deregulation, two-way fixed effects, state-year panel 1976-2006",
+  "estimate_label": "Effect of deregulation (log points)",
+  "row_id": "row_id",
+  "unit": "state",
+  "time": "year",
+  "base": {
+    "outcome": "log_gini",
+    "treatment": "deregulated",
+    "required_controls": [],
+    "fixed_effects": [
+      "state",
+      "year"
+    ],
+    "vcov": {
+      "type": "cluster",
+      "cluster": "state"
+    },
+    "filters": []
+  },
+  "confidence_level": 0.95,
+  "panel_by": "outcome_measure",
+  "dimensions": [
+    {
+      "name": "outcome_measure",
+      "label": "Outcome",
+      "justification": "Different inequality measures are different estimands; each gets its own panel.",
+      "options": [
+        {
+          "id": "log_gini",
+          "label": "Log Gini",
+          "outcome": "log_gini",
+          "justification": "BLL Table II column 2; the baseline re-reported by Baker et al. (2022)."
+        },
+        {
+          "id": "logistic_gini",
+          "label": "Logistic Gini",
+          "outcome": "logistic_gini",
+          "justification": "BLL Table II column 1, the headline measure."
+        },
+        {
+          "id": "log_theil",
+          "label": "Log Theil",
+          "outcome": "log_theil",
+          "justification": "BLL Table II column 3."
+        }
+      ]
+    },
+    {
+      "name": "controls",
+      "label": "Controls",
+      "options": [
+        {
+          "id": "none",
+          "label": "None",
+          "justification": "BLL Table II Panel A."
+        },
+        {
+          "id": "bll",
+          "label": "BLL controls",
+          "add_controls": [
+            "gsp_pc_growth",
+            "prop_blacks",
+            "prop_dropouts",
+            "prop_female_headed",
+            "unemploymentrate"
+          ],
+          "justification": "BLL Table II Panel B."
+        },
+        {
+          "id": "bll_no_unemp",
+          "label": "BLL controls excl. unemployment",
+          "add_controls": [
+            "gsp_pc_growth",
+            "prop_blacks",
+            "prop_dropouts",
+            "prop_female_headed"
+          ],
+          "justification": "BLL show deregulation lowered unemployment (their Figure 6), so it may be a channel rather than a confounder."
+        }
+      ]
+    },
+    {
+      "name": "window",
+      "label": "Sample window",
+      "options": [
+        {
+          "id": "y2006",
+          "label": "1976-2006",
+          "justification": "Published sample."
+        },
+        {
+          "id": "y1999",
+          "label": "1976-1999",
+          "filters": [
+            {
+              "variable": "year",
+              "op": "<=",
+              "value": 1999
+            }
+          ],
+          "justification": "BLL robustness check; 1999 is the last reform year."
+        }
+      ]
+    },
+    {
+      "name": "states",
+      "label": "States",
+      "options": [
+        {
+          "id": "all",
+          "label": "All 49",
+          "justification": "Published sample (excludes DE and SD)."
+        },
+        {
+          "id": "drop_hi_ut_va",
+          "label": "Drop HI, UT, VA",
+          "filters": [
+            {
+              "variable": "state",
+              "op": "not_in",
+              "value": [
+                15,
+                49,
+                51
+              ]
+            }
+          ],
+          "justification": "BLL robustness check for possible outliers."
+        },
+        {
+          "id": "drop_pre1976",
+          "label": "Drop pre-1976 reformers",
+          "filters": [
+            {
+              "variable": "reformed_before_1976",
+              "op": "==",
+              "value": 0
+            }
+          ],
+          "justification": "Twelve states have no pre-reform years and serve only as comparisons (Goodman-Bacon, 2021; Baker et al., 2022)."
+        }
+      ]
+    },
+    {
+      "name": "time_effects",
+      "label": "Time effects",
+      "options": [
+        {
+          "id": "year",
+          "label": "Year FE",
+          "fixed_effects": [
+            "state",
+            "year"
+          ],
+          "justification": "Published specification."
+        },
+        {
+          "id": "region_year",
+          "label": "Region-by-year FE",
+          "fixed_effects": [
+            "state",
+            "region_year"
+          ],
+          "justification": "Absorbs Census-region shocks common in state-policy panels."
+        },
+        {
+          "id": "state_trends",
+          "label": "Year FE + state trends",
+          "fixed_effects": [
+            "state",
+            "year"
+          ],
+          "unit_trend": true,
+          "justification": "State-specific linear trends are a standard state-panel robustness check."
+        }
+      ]
+    },
+    {
+      "name": "timing",
+      "label": "Treatment timing",
+      "options": [
+        {
+          "id": "after",
+          "label": "Year after reform",
+          "treatment": "deregulated",
+          "justification": "BLL coding (_intra)."
+        },
+        {
+          "id": "from",
+          "label": "Reform year",
+          "treatment": "deregulated_from_reform_year",
+          "justification": "The reform year is partly treated; both codings are used in the literature."
+        }
+      ]
+    }
+  ],
+  "sample_modes": [
+    "available"
+  ],
+  "exclusions": [],
+  "preferred": {
+    "outcome_measure": "log_gini",
+    "controls": "none",
+    "window": "y2006",
+    "states": "all",
+    "time_effects": "year",
+    "timing": "after",
+    "sample_mode": "available"
+  },
+  "original_specifications": [
+    {
+      "window": "y1999",
+      "states": "all",
+      "time_effects": "year",
+      "timing": "after",
+      "sample_mode": "available",
+      "outcome_measure": "log_gini",
+      "controls": "none"
+    },
+    {
+      "window": "y2006",
+      "states": "drop_hi_ut_va",
+      "time_effects": "year",
+      "timing": "after",
+      "sample_mode": "available",
+      "outcome_measure": "log_gini",
+      "controls": "none"
+    },
+    {
+      "window": "y2006",
+      "states": "all",
+      "time_effects": "year",
+      "timing": "after",
+      "sample_mode": "available",
+      "outcome_measure": "log_gini",
+      "controls": "bll"
+    },
+    {
+      "window": "y1999",
+      "states": "all",
+      "time_effects": "year",
+      "timing": "after",
+      "sample_mode": "available",
+      "outcome_measure": "log_gini",
+      "controls": "bll"
+    },
+    {
+      "window": "y2006",
+      "states": "drop_hi_ut_va",
+      "time_effects": "year",
+      "timing": "after",
+      "sample_mode": "available",
+      "outcome_measure": "log_gini",
+      "controls": "bll"
+    },
+    {
+      "window": "y2006",
+      "states": "all",
+      "time_effects": "year",
+      "timing": "after",
+      "sample_mode": "available",
+      "outcome_measure": "logistic_gini",
+      "controls": "none"
+    },
+    {
+      "window": "y1999",
+      "states": "all",
+      "time_effects": "year",
+      "timing": "after",
+      "sample_mode": "available",
+      "outcome_measure": "logistic_gini",
+      "controls": "none"
+    },
+    {
+      "window": "y2006",
+      "states": "drop_hi_ut_va",
+      "time_effects": "year",
+      "timing": "after",
+      "sample_mode": "available",
+      "outcome_measure": "logistic_gini",
+      "controls": "none"
+    },
+    {
+      "window": "y2006",
+      "states": "all",
+      "time_effects": "year",
+      "timing": "after",
+      "sample_mode": "available",
+      "outcome_measure": "logistic_gini",
+      "controls": "bll"
+    },
+    {
+      "window": "y1999",
+      "states": "all",
+      "time_effects": "year",
+      "timing": "after",
+      "sample_mode": "available",
+      "outcome_measure": "logistic_gini",
+      "controls": "bll"
+    },
+    {
+      "window": "y2006",
+      "states": "drop_hi_ut_va",
+      "time_effects": "year",
+      "timing": "after",
+      "sample_mode": "available",
+      "outcome_measure": "logistic_gini",
+      "controls": "bll"
+    },
+    {
+      "window": "y2006",
+      "states": "all",
+      "time_effects": "year",
+      "timing": "after",
+      "sample_mode": "available",
+      "outcome_measure": "log_theil",
+      "controls": "none"
+    },
+    {
+      "window": "y1999",
+      "states": "all",
+      "time_effects": "year",
+      "timing": "after",
+      "sample_mode": "available",
+      "outcome_measure": "log_theil",
+      "controls": "none"
+    },
+    {
+      "window": "y2006",
+      "states": "drop_hi_ut_va",
+      "time_effects": "year",
+      "timing": "after",
+      "sample_mode": "available",
+      "outcome_measure": "log_theil",
+      "controls": "none"
+    },
+    {
+      "window": "y2006",
+      "states": "all",
+      "time_effects": "year",
+      "timing": "after",
+      "sample_mode": "available",
+      "outcome_measure": "log_theil",
+      "controls": "bll"
+    },
+    {
+      "window": "y1999",
+      "states": "all",
+      "time_effects": "year",
+      "timing": "after",
+      "sample_mode": "available",
+      "outcome_measure": "log_theil",
+      "controls": "bll"
+    },
+    {
+      "window": "y2006",
+      "states": "drop_hi_ut_va",
+      "time_effects": "year",
+      "timing": "after",
+      "sample_mode": "available",
+      "outcome_measure": "log_theil",
+      "controls": "bll"
+    }
+  ],
+  "reference": {
+    "estimate": -0.022,
+    "std_error": 0.008,
+    "tolerance": 0.0005,
+    "source": "Beck, Levine and Levkov (2010) Table II, Panel A, column 2 (log Gini); re-reported by Baker, Larcker and Wang (2022) Table 2, Panel A, column 1"
+  },
+  "joint_inference": "not_implemented",
+  "figure": {
+    "width": 7.2,
+    "height": 6.2
+  },
+  "notes": "Menu written before any curve estimate; see Supplementary Material, Section S1. Heterogeneity-robust staggered-adoption estimators target different weighted averages and are not part of this TWFE curve."
+}

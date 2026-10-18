@@ -1,5 +1,0 @@
-# Introduction
-
-Specification curves display how estimates vary across a set of analytical choices [@simonsohn2020]. This guide will explain their construction and interpretation in empirical finance and illustrate the workflow through two published-paper applications.
-
-The discussion will relate the approach to methodological variation in corporate finance [@mitton2022], model sensitivity in finance applications [@cohn2022], and variation across research teams [@menkveld2024].

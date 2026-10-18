@@ -1,0 +1,322 @@
+{
+  "schema_version": 2,
+  "version": "cz-am-v1",
+  "analysis_kind": "application",
+  "estimator": "time_series_mean",
+  "title": "Total assets to market (Fama and French, 1992): long-short portfolio returns",
+  "estimand": "Mean monthly return of the high-minus-low AM long-short portfolio, in percent per month",
+  "estimate_label": "Mean long-short return (% per month)",
+  "row_id": "row_id",
+  "unit": "series",
+  "time": "yyyymm",
+  "base": {
+    "outcome": "ret",
+    "vcov": {
+      "type": "newey_west",
+      "lags": 12
+    },
+    "filters": [
+      {
+        "variable": "min_leg",
+        "op": ">=",
+        "value": 20
+      }
+    ]
+  },
+  "confidence_level": 0.95,
+  "panel_by": "period",
+  "dimensions": [
+    {
+      "name": "period",
+      "label": "Period",
+      "options": [
+        {
+          "id": "original",
+          "label": "1963-1990 (original sample)",
+          "filters": [
+            {
+              "variable": "year",
+              "op": ">=",
+              "value": 1963
+            },
+            {
+              "variable": "year",
+              "op": "<=",
+              "value": 1990
+            }
+          ],
+          "justification": "Fama and French (1992) sample; Chen and Zimmermann's in-sample replication."
+        },
+        {
+          "id": "after",
+          "label": "1991-2020 (after original sample)",
+          "filters": [
+            {
+              "variable": "year",
+              "op": ">=",
+              "value": 1991
+            },
+            {
+              "variable": "year",
+              "op": "<=",
+              "value": 2020
+            }
+          ],
+          "justification": "Out-of-sample persistence is a different question, so it gets its own panel."
+        }
+      ]
+    },
+    {
+      "name": "breakpoints",
+      "label": "Breakpoints",
+      "options": [
+        {
+          "id": "quintile",
+          "label": "Quintiles",
+          "filters": [
+            {
+              "variable": "breakpoints",
+              "op": "==",
+              "value": "quintile"
+            }
+          ],
+          "justification": "Original-paper (OP) construction in Chen and Zimmermann."
+        },
+        {
+          "id": "decile",
+          "label": "Deciles",
+          "filters": [
+            {
+              "variable": "breakpoints",
+              "op": "==",
+              "value": "decile"
+            }
+          ],
+          "justification": "Decile spreads are equally common in the anomalies literature."
+        }
+      ]
+    },
+    {
+      "name": "weighting",
+      "label": "Weighting",
+      "options": [
+        {
+          "id": "ew",
+          "label": "Equal",
+          "filters": [
+            {
+              "variable": "weighting",
+              "op": "==",
+              "value": "ew"
+            }
+          ],
+          "justification": "OP construction."
+        },
+        {
+          "id": "vw",
+          "label": "Value",
+          "filters": [
+            {
+              "variable": "weighting",
+              "op": "==",
+              "value": "vw"
+            }
+          ],
+          "justification": "Limits the influence of microcaps (Hou, Xue and Zhang, 2020)."
+        }
+      ]
+    },
+    {
+      "name": "rebalancing",
+      "label": "Rebalancing",
+      "options": [
+        {
+          "id": "annual",
+          "label": "Annual",
+          "filters": [
+            {
+              "variable": "rebalancing",
+              "op": "==",
+              "value": "annual"
+            }
+          ],
+          "justification": "OP construction."
+        },
+        {
+          "id": "semiannual",
+          "label": "Semiannual",
+          "filters": [
+            {
+              "variable": "rebalancing",
+              "op": "==",
+              "value": "semiannual"
+            }
+          ],
+          "justification": "Chen and Zimmermann alternative holding period."
+        },
+        {
+          "id": "quarterly",
+          "label": "Quarterly",
+          "filters": [
+            {
+              "variable": "rebalancing",
+              "op": "==",
+              "value": "quarterly"
+            }
+          ],
+          "justification": "Chen and Zimmermann alternative holding period."
+        },
+        {
+          "id": "monthly",
+          "label": "Monthly",
+          "filters": [
+            {
+              "variable": "rebalancing",
+              "op": "==",
+              "value": "monthly"
+            }
+          ],
+          "justification": "Chen and Zimmermann alternative holding period."
+        }
+      ]
+    },
+    {
+      "name": "screen",
+      "label": "Liquidity screen",
+      "options": [
+        {
+          "id": "none",
+          "label": "None",
+          "filters": [
+            {
+              "variable": "screen",
+              "op": "==",
+              "value": "none"
+            }
+          ],
+          "justification": "OP construction."
+        },
+        {
+          "id": "me_nyse20",
+          "label": "Size above NYSE 20th pct",
+          "filters": [
+            {
+              "variable": "screen",
+              "op": "==",
+              "value": "me_nyse20"
+            }
+          ],
+          "justification": "Excludes microcaps."
+        },
+        {
+          "id": "price5",
+          "label": "Price above $5",
+          "filters": [
+            {
+              "variable": "screen",
+              "op": "==",
+              "value": "price5"
+            }
+          ],
+          "justification": "Common low-price screen."
+        },
+        {
+          "id": "nyse_only",
+          "label": "NYSE stocks only",
+          "filters": [
+            {
+              "variable": "screen",
+              "op": "==",
+              "value": "nyse_only"
+            }
+          ],
+          "justification": "Common exchange screen."
+        }
+      ]
+    }
+  ],
+  "sample_modes": [
+    "available"
+  ],
+  "exclusions": [
+    {
+      "match": {
+        "rebalancing": [
+          "semiannual",
+          "quarterly",
+          "monthly"
+        ],
+        "screen": [
+          "me_nyse20",
+          "price5",
+          "nyse_only"
+        ]
+      },
+      "reason": "Not computable from the public portfolio files, which change one construction choice at a time (except breakpoints by weighting); other combinations need licensed firm-level returns."
+    },
+    {
+      "match": {
+        "rebalancing": [
+          "semiannual",
+          "quarterly",
+          "monthly"
+        ],
+        "breakpoints": "decile"
+      },
+      "reason": "Not computable from the public portfolio files, which change one construction choice at a time (except breakpoints by weighting); other combinations need licensed firm-level returns."
+    },
+    {
+      "match": {
+        "rebalancing": [
+          "semiannual",
+          "quarterly",
+          "monthly"
+        ],
+        "weighting": "vw"
+      },
+      "reason": "Not computable from the public portfolio files, which change one construction choice at a time (except breakpoints by weighting); other combinations need licensed firm-level returns."
+    },
+    {
+      "match": {
+        "screen": [
+          "me_nyse20",
+          "price5",
+          "nyse_only"
+        ],
+        "breakpoints": "decile"
+      },
+      "reason": "Not computable from the public portfolio files, which change one construction choice at a time (except breakpoints by weighting); other combinations need licensed firm-level returns."
+    },
+    {
+      "match": {
+        "screen": [
+          "me_nyse20",
+          "price5",
+          "nyse_only"
+        ],
+        "weighting": "vw"
+      },
+      "reason": "Not computable from the public portfolio files, which change one construction choice at a time (except breakpoints by weighting); other combinations need licensed firm-level returns."
+    }
+  ],
+  "preferred": {
+    "period": "original",
+    "breakpoints": "quintile",
+    "weighting": "ew",
+    "rebalancing": "annual",
+    "screen": "none",
+    "sample_mode": "available"
+  },
+  "original_specifications": [],
+  "reference": {
+    "estimate": 0.63,
+    "tolerance": 0.005,
+    "source": "Chen and Zimmermann (2022) Table 2 (in-sample replication of Fama and French, 1992): AM, 1963-1990, mean 0.63% per month, t = 3.50 (i.i.d.)"
+  },
+  "joint_inference": "not_implemented",
+  "figure": {
+    "width": 7.2,
+    "height": 5.2
+  },
+  "notes": "Menu written before any curve estimate; selection rule and vintage in Supplementary Material, Section S1. Newey-West (12 lags) throughout; the published t-statistic uses i.i.d. errors and is reproduced separately."
+}

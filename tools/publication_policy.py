@@ -15,27 +15,37 @@ LEGACY_IMAGES = {
     "Sample_Output/spec_curve_treat.png": "8ffb49133ae31d1725f8288aee39bd0489ade3cc",
 }
 EXACT_PATHS = {
-    ".gitignore", ".renvignore", "CITATION.cff", "readme.md", "Makefile", "renv.lock",
+    ".gitignore", ".renvignore", "CITATION.cff", "LICENSE", "readme.md", "Makefile", "renv.lock",
     "Sample Specification Curves.code-workspace",
     "spec_curve_print_curve_sample.R", "spec_curve_run_models_sample.R",
     ".githooks/pre-commit", ".githooks/pre-push",
     ".github/workflows/check.yml", "paper/run.R",
     "paper/scripts/acquire_mitton_materials.py",
     "paper/config/demo.json", "paper/config/applications.json",
-    "paper/manuscript/paper.qmd", "paper/manuscript/_quarto.yml",
-    "paper/manuscript/references.bib",
-    "paper/manuscript/sections/01_introduction.qmd",
-    "paper/manuscript/sections/02_constructing_reading.qmd",
-    "paper/manuscript/sections/03_best_practices.qmd",
-    "paper/manuscript/sections/04_applications.qmd",
-    "paper/manuscript/sections/05_conclusion.qmd",
-    "tools/publication_policy.py", "tools/test_publication_policy.py",
+        "tools/publication_policy.py", "tools/test_publication_policy.py",
+    "tools/compare_implementations.py",
+    "paper/config/menu.schema.json", "paper/reproduce.sh",
+    "docs/ai-guide.md", "docs/templates/agent-instructions.md",
+    "python/pyproject.toml", "stata/speccurve_run.do",
 }
+# Directory patterns: (parent parts, allowed suffixes). Application folders hold
+# only scripts, menus and documentation; data never live in the repository.
+PATTERN_PATHS = (
+    (("paper", "R"), (".R",)),
+    (("paper", "tests"), (".R",)),
+    (("paper", "figures"), (".R",)),
+    (("docs", "prompts"), (".md",)),
+    (("python", "speccurve"), (".py",)),
+    (("python", "tests"), (".py",)),
+)
+APPLICATION_FILES = {"README.md", "build_input.R", "menu.json"}
 PRIVATE_NAMES = {
     "data", "raw", "processed", "notes", "research", "transcripts",
     "conversations", "logs", "output", "outputs", "results", "scratch",
     ".paper-agent", ".env", ".renviron", "agents.md", "claude.md",
     "project.yaml", "rules.yaml", "project_memory.md",
+    # The manuscript is kept private; only code and code documentation are public.
+    "manuscript", "submission", "highlights", "cover_letter", "supplement",
 }
 PRIVATE_CONTENT = (
     re.compile(r"(?mi)^\s*(?:user|assistant|system)\s*:\s+"),
@@ -54,13 +64,14 @@ def allowed_path(path):
     parts = PurePosixPath(path).parts
     if any(part.lower() in PRIVATE_NAMES for part in parts):
         return False
+    if PurePosixPath(path).stem.lower() in PRIVATE_NAMES:
+        return False
     if path in EXACT_PATHS or path in LEGACY_IMAGES:
         return True
-    return (
-        len(parts) == 3
-        and parts[:2] in (("paper", "R"), ("paper", "tests"))
-        and parts[-1].endswith(".R")
-    )
+    for parent, suffixes in PATTERN_PATHS:
+        if parts[:-1] == parent and parts[-1].endswith(suffixes):
+            return True
+    return len(parts) == 4 and parts[:2] == ("paper", "applications") and parts[-1] in APPLICATION_FILES
 
 
 def inspect_blob(path, mode, oid, content):

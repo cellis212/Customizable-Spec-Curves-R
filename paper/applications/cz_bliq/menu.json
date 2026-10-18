@@ -1,0 +1,307 @@
+{
+  "schema_version": 2,
+  "version": "cz-bliq-v1",
+  "analysis_kind": "application",
+  "estimator": "time_series_mean",
+  "title": "Pastor-Stambaugh liquidity beta: long-short portfolio returns (value-weighted original construction)",
+  "estimand": "Mean monthly return of the high-minus-low liquidity-beta long-short portfolio, in percent per month",
+  "estimate_label": "Mean long-short return (% per month)",
+  "row_id": "row_id",
+  "unit": "series",
+  "time": "yyyymm",
+  "base": {
+    "outcome": "ret",
+    "vcov": {
+      "type": "newey_west",
+      "lags": 12
+    },
+    "filters": [
+      {
+        "variable": "min_leg",
+        "op": ">=",
+        "value": 20
+      }
+    ]
+  },
+  "confidence_level": 0.95,
+  "panel_by": "period",
+  "dimensions": [
+    {
+      "name": "period",
+      "label": "Period",
+      "options": [
+        {
+          "id": "original",
+          "label": "1968-1999 (original sample)",
+          "filters": [
+            {
+              "variable": "year",
+              "op": ">=",
+              "value": 1968
+            },
+            {
+              "variable": "year",
+              "op": "<=",
+              "value": 1999
+            }
+          ],
+          "justification": "Pastor and Stambaugh (2003) sample; Chen and Zimmermann's in-sample replication."
+        },
+        {
+          "id": "after",
+          "label": "2000-2024 (after original sample)",
+          "filters": [
+            {
+              "variable": "year",
+              "op": ">=",
+              "value": 2000
+            },
+            {
+              "variable": "year",
+              "op": "<=",
+              "value": 2024
+            }
+          ],
+          "justification": "Returns outside the original sample answer a different question, so they get their own panel."
+        }
+      ]
+    },
+    {
+      "name": "breakpoints",
+      "label": "Breakpoints",
+      "options": [
+        {
+          "id": "decile",
+          "label": "Deciles",
+          "filters": [
+            {
+              "variable": "breakpoints",
+              "op": "==",
+              "value": "decile"
+            }
+          ],
+          "justification": "Original-paper (OP) construction."
+        },
+        {
+          "id": "quintile",
+          "label": "Quintiles",
+          "filters": [
+            {
+              "variable": "breakpoints",
+              "op": "==",
+              "value": "quintile"
+            }
+          ],
+          "justification": "Quintile spreads are equally common."
+        }
+      ]
+    },
+    {
+      "name": "weighting",
+      "label": "Weighting",
+      "options": [
+        {
+          "id": "vw",
+          "label": "Value",
+          "filters": [
+            {
+              "variable": "weighting",
+              "op": "==",
+              "value": "vw"
+            }
+          ],
+          "justification": "OP construction; the conventionally conservative choice."
+        },
+        {
+          "id": "ew",
+          "label": "Equal",
+          "filters": [
+            {
+              "variable": "weighting",
+              "op": "==",
+              "value": "ew"
+            }
+          ],
+          "justification": "Common in the anomalies literature."
+        }
+      ]
+    },
+    {
+      "name": "rebalancing",
+      "label": "Rebalancing",
+      "options": [
+        {
+          "id": "annual",
+          "label": "Annual",
+          "filters": [
+            {
+              "variable": "rebalancing",
+              "op": "==",
+              "value": "annual"
+            }
+          ],
+          "justification": "OP construction."
+        },
+        {
+          "id": "semiannual",
+          "label": "Semiannual",
+          "filters": [
+            {
+              "variable": "rebalancing",
+              "op": "==",
+              "value": "semiannual"
+            }
+          ],
+          "justification": "Chen and Zimmermann alternative holding period."
+        },
+        {
+          "id": "quarterly",
+          "label": "Quarterly",
+          "filters": [
+            {
+              "variable": "rebalancing",
+              "op": "==",
+              "value": "quarterly"
+            }
+          ],
+          "justification": "Chen and Zimmermann alternative holding period."
+        },
+        {
+          "id": "monthly",
+          "label": "Monthly",
+          "filters": [
+            {
+              "variable": "rebalancing",
+              "op": "==",
+              "value": "monthly"
+            }
+          ],
+          "justification": "Chen and Zimmermann alternative holding period."
+        }
+      ]
+    },
+    {
+      "name": "screen",
+      "label": "Liquidity screen",
+      "options": [
+        {
+          "id": "price5",
+          "label": "Price above $5 (OP)",
+          "filters": [
+            {
+              "variable": "screen",
+              "op": "==",
+              "value": "price5"
+            }
+          ],
+          "justification": "OP filter."
+        },
+        {
+          "id": "me_nyse20",
+          "label": "Size above NYSE 20th pct",
+          "filters": [
+            {
+              "variable": "screen",
+              "op": "==",
+              "value": "me_nyse20"
+            }
+          ],
+          "justification": "Excludes microcaps; replaces the OP filter."
+        },
+        {
+          "id": "nyse_only",
+          "label": "NYSE stocks only",
+          "filters": [
+            {
+              "variable": "screen",
+              "op": "==",
+              "value": "nyse_only"
+            }
+          ],
+          "justification": "Common exchange screen; replaces the OP filter."
+        }
+      ]
+    }
+  ],
+  "sample_modes": [
+    "available"
+  ],
+  "exclusions": [
+    {
+      "match": {
+        "rebalancing": [
+          "semiannual",
+          "quarterly",
+          "monthly"
+        ],
+        "screen": [
+          "me_nyse20",
+          "nyse_only"
+        ]
+      },
+      "reason": "Not computable from the public portfolio files, which change one construction choice at a time (except breakpoints by weighting); other combinations need licensed firm-level returns."
+    },
+    {
+      "match": {
+        "rebalancing": [
+          "semiannual",
+          "quarterly",
+          "monthly"
+        ],
+        "breakpoints": "quintile"
+      },
+      "reason": "Not computable from the public portfolio files, which change one construction choice at a time (except breakpoints by weighting); other combinations need licensed firm-level returns."
+    },
+    {
+      "match": {
+        "rebalancing": [
+          "semiannual",
+          "quarterly",
+          "monthly"
+        ],
+        "weighting": "ew"
+      },
+      "reason": "Not computable from the public portfolio files, which change one construction choice at a time (except breakpoints by weighting); other combinations need licensed firm-level returns."
+    },
+    {
+      "match": {
+        "screen": [
+          "me_nyse20",
+          "nyse_only"
+        ],
+        "breakpoints": "quintile"
+      },
+      "reason": "Not computable from the public portfolio files, which change one construction choice at a time (except breakpoints by weighting); other combinations need licensed firm-level returns."
+    },
+    {
+      "match": {
+        "screen": [
+          "me_nyse20",
+          "nyse_only"
+        ],
+        "weighting": "ew"
+      },
+      "reason": "Not computable from the public portfolio files, which change one construction choice at a time (except breakpoints by weighting); other combinations need licensed firm-level returns."
+    }
+  ],
+  "preferred": {
+    "period": "original",
+    "breakpoints": "decile",
+    "weighting": "vw",
+    "rebalancing": "annual",
+    "screen": "price5",
+    "sample_mode": "available"
+  },
+  "original_specifications": [],
+  "reference": {
+    "estimate": 0.37,
+    "tolerance": 0.005,
+    "source": "Chen and Zimmermann, October 2025 release, PredictorSummary in-sample replication of Pastor and Stambaugh (2003): BetaLiquidityPS, 1968-1999, 0.37% per month, t = 2.03 (i.i.d.); the CZ (2022) table reports 0.35, t = 1.93 from an earlier data vintage"
+  },
+  "joint_inference": "not_implemented",
+  "figure": {
+    "width": 7.2,
+    "height": 5.2
+  },
+  "notes": "Conservative-construction example (value-weighted original construction). Menu written before any curve estimate; selection rule in Supplementary Material, Section S1. Newey-West (12 lags) throughout."
+}

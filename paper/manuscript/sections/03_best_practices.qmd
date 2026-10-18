@@ -1,3 +1,0 @@
-# Best practices
-
-*Guidance on defensible alternatives, effect sizes, sample changes, and pointwise uncertainty pending.*

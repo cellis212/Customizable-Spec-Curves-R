@@ -1,5 +1,6 @@
-# A deliberately scoped reference implementation: linear fixed-effects models,
-# one-way cluster-robust pointwise uncertainty, and descriptive sensitivity.
+# A deliberately scoped reference implementation: linear fixed-effects models
+# and time-series means, declared pointwise uncertainty conventions, and
+# descriptive sensitivity summaries. It provides no joint inference.
 
 abort_if <- function(condition, message) {
   if (isTRUE(condition)) stop(message, call. = FALSE)
@@ -8,45 +9,209 @@ abort_if <- function(condition, message) {
 sha256 <- function(x) digest::digest(x, algo = "sha256", serialize = TRUE)
 file_sha256 <- function(path) digest::digest(file = path, algo = "sha256")
 
+# Language-neutral observation identity: SHA-256 of the sorted identifiers as
+# text, one per line, in C-locale order. Whole numbers print without exponents.
+id_text <- function(ids) if (is.numeric(ids) && all(ids == round(ids))) sprintf("%.0f", ids) else as.character(ids)
+sample_sha256 <- function(ids) digest::digest(paste(sort(id_text(ids), method = "radix"), collapse = "\n"),
+                                               algo = "sha256", serialize = FALSE)
+
 source_hashes <- function(root) {
   paths <- c("paper/run.R", "renv.lock", file.path("paper/R",
     sort(list.files(file.path(root, "paper/R"), "[.]R$", full.names = FALSE))))
   stats::setNames(vapply(file.path(root, paths), file_sha256, ""), paths)
 }
 
+estimators <- c("linear_fixed_effects", "time_series_mean")
+filter_ops <- c("==", "!=", ">=", "<=", ">", "<", "in", "not_in")
+replacement_fields <- c("outcome", "treatment", "fixed_effects", "unit_trend", "vcov")
+result_fields <- c("panel", "formula", "estimator", "outcome", "treatment", "control_vars", "fixed_effect_terms",
+                   "unit_trend", "vcov", "filters", "confidence_level", "status", "error", "estimate",
+                   "std_error", "statistic", "p_value", "ci_lower", "ci_upper", "n_input", "n_eligible",
+                   "n_obs", "n_units", "n_periods", "n_clusters", "n_estimator_dropped", "sample_hash",
+                   "dropped_terms", "manifest_hash", "input_hash", "facet", "rank", "role")
+reserved_names <- c("spec_id", "sample_mode", "preferred", "original", result_fields)
+simple_name <- "^[A-Za-z][A-Za-z0-9_]*$"
+
+# Menus are parsed without simplification, so arrays of objects stay lists of
+# records and absent optional fields stay NULL.
+read_menu <- function(path) jsonlite::read_json(path, simplifyVector = FALSE)
+
+menu_dimensions <- function(menu) menu$dimensions
+
+dimension_names <- function(menu) vapply(menu_dimensions(menu), function(d) d$name, "")
+
+find_option <- function(menu, dimension, id) {
+  dims <- menu_dimensions(menu)
+  d <- dims[[match(dimension, vapply(dims, function(x) x$name, ""))]]
+  d$options[[match(id, vapply(d$options, function(o) o$id, ""))]]
+}
+
+normalise_filters <- function(filters) {
+  lapply(filters, function(f) {
+    f$value <- unlist(f$value)
+    f
+  })
+}
+
+normalise_vcov <- function(vcov) {
+  if (is.null(vcov)) return(NULL)
+  vcov <- as.list(vcov)
+  if (!is.null(vcov$lags)) vcov$lags <- as.numeric(vcov$lags)
+  vcov
+}
+
+vcov_label <- function(vcov) {
+  switch(vcov$type,
+    cluster = paste0("cluster(", vcov$cluster, ")"),
+    iid = "iid", hetero = "heteroskedasticity-robust",
+    newey_west = paste0("Newey-West(", vcov$lags, ")"),
+    stop("Unknown vcov type.", call. = FALSE))
+}
+
+# Resolve one row of the grid into a model: start from the base model and apply
+# each chosen option. Replacements may come from one dimension only; filters
+# and controls accumulate.
+resolve_spec <- function(menu, choice) {
+  base <- menu$base
+  spec <- list(outcome = base$outcome, treatment = base$treatment,
+               controls = unlist(base$required_controls), fixed_effects = unlist(base$fixed_effects),
+               unit_trend = isTRUE(base$unit_trend), vcov = normalise_vcov(base$vcov),
+               filters = normalise_filters(base$filters), panel = "All specifications")
+  for (d in menu_dimensions(menu)) {
+    option <- find_option(menu, d$name, choice[[d$name]])
+    for (field in replacement_fields) if (!is.null(option[[field]])) {
+      spec[[field]] <- if (field == "vcov") normalise_vcov(option$vcov) else
+        if (field == "fixed_effects") unlist(option$fixed_effects) else option[[field]]
+    }
+    spec$controls <- unique(c(spec$controls, unlist(option$add_controls)))
+    spec$filters <- c(spec$filters, normalise_filters(option$filters))
+    if (identical(d$name, menu$panel_by)) spec$panel <- option$label
+  }
+  spec$filter_signature <- if (length(spec$filters)) paste(vapply(spec$filters, function(f)
+    paste(f$variable, f$op, paste(f$value, collapse = ",")), ""), collapse = " & ") else "none"
+  spec
+}
+
+spec_variables <- function(menu, spec) {
+  unique(c(spec$outcome, spec$treatment, spec$controls, spec$fixed_effects,
+           if (identical(spec$vcov$type, "cluster")) spec$vcov$cluster,
+           vapply(spec$filters, function(f) f$variable, ""),
+           menu$unit, menu$time, menu$row_id))
+}
+
+model_formula <- function(menu, spec) {
+  if (menu$estimator == "time_series_mean") return(paste(spec$outcome, "~ 1"))
+  formula <- paste(spec$outcome, "~", paste(c(spec$treatment, spec$controls), collapse = " + "))
+  fe <- spec$fixed_effects
+  if (spec$unit_trend) fe[fe == menu$unit] <- paste0(menu$unit, "[", menu$time, "]")
+  if (length(fe)) formula <- paste(formula, "|", paste(fe, collapse = " + "))
+  formula
+}
+
+choice_grid <- function(menu) {
+  dims <- menu_dimensions(menu)
+  levels <- stats::setNames(lapply(dims, function(d) vapply(d$options, function(o) o$id, "")),
+                            vapply(dims, function(d) d$name, ""))
+  levels$sample_mode <- unlist(menu$sample_modes)
+  grid <- expand.grid(levels, stringsAsFactors = FALSE, KEEP.OUT.ATTRS = FALSE)
+  matches <- function(rule) {
+    keep <- rep(TRUE, nrow(grid))
+    for (name in names(rule$match)) keep <- keep & grid[[name]] %in% unlist(rule$match[[name]])
+    keep
+  }
+  excluded <- rep(FALSE, nrow(grid))
+  reasons <- rep("", nrow(grid))
+  for (rule in menu$exclusions) {
+    hit <- matches(rule) & !excluded
+    reasons[hit] <- rule$reason
+    excluded <- excluded | hit
+  }
+  list(grid = grid[!excluded, , drop = FALSE], excluded = cbind(grid[excluded, , drop = FALSE],
+       reason = reasons[excluded], stringsAsFactors = FALSE))
+}
+
+same_choice <- function(grid, choice) {
+  keep <- rep(TRUE, nrow(grid))
+  for (name in names(choice)) keep <- keep & grid[[name]] == choice[[name]]
+  keep
+}
+
+validate_vcov <- function(menu, vcov) {
+  abort_if(is.null(vcov$type), "Every specification needs an uncertainty convention.")
+  allowed <- if (menu$estimator == "linear_fixed_effects") c("cluster", "iid", "hetero") else c("iid", "newey_west")
+  abort_if(!vcov$type %in% allowed, paste("Unsupported vcov for", menu$estimator, ":", vcov$type))
+  if (vcov$type == "cluster") abort_if(is.null(vcov$cluster) || !nzchar(vcov$cluster), "Cluster variable missing.")
+  if (vcov$type == "newey_west") abort_if(!is.numeric(vcov$lags) || vcov$lags < 0 || vcov$lags != round(vcov$lags),
+                                          "Newey-West lags must be a nonnegative integer.")
+}
+
 validate_menu <- function(menu, data) {
-  fields <- c("version", "analysis_kind", "estimator", "estimand", "outcome", "treatment", "row_id",
-              "unit", "time", "required_controls", "fixed_effects", "cluster",
-              "confidence_level", "control_blocks", "sample_modes", "preferred")
-  abort_if(!all(fields %in% names(menu)), "Menu is missing required fields.")
+  fields <- c("schema_version", "version", "analysis_kind", "estimator", "title", "estimand", "row_id",
+              "unit", "time", "base", "confidence_level", "dimensions", "sample_modes", "preferred")
+  abort_if(!all(fields %in% names(menu)), paste("Menu is missing required fields:",
+           paste(setdiff(fields, names(menu)), collapse = ", ")))
+  abort_if(!identical(as.integer(menu$schema_version), 2L), "Menu schema_version must be 2.")
   abort_if(!menu$analysis_kind %in% c("synthetic_demo", "application"), "Unknown analysis kind.")
-  abort_if(!identical(menu$estimator, "linear_fixed_effects"), "This runner supports linear fixed-effects models only.")
-  vars <- unique(c(menu$outcome, menu$treatment, menu$row_id, menu$unit, menu$time,
-                   menu$cluster, menu$required_controls, menu$fixed_effects,
-                   unlist(menu$control_blocks, use.names = FALSE)))
-  abort_if(!all(vars %in% names(data)), "Menu references variables absent from input data.")
-  abort_if(any(!grepl("^[A-Za-z][A-Za-z0-9_]*$", vars)), "Use simple variable names in the menu.")
-  abort_if(anyNA(data[[menu$row_id]]) || anyDuplicated(data[[menu$row_id]]) > 0L,
-           "Observation identifiers must be unique and nonmissing.")
-  abort_if(!is.list(menu$control_blocks) || !length(menu$control_blocks) ||
-             is.null(names(menu$control_blocks)) || anyDuplicated(names(menu$control_blocks)) > 0L,
-           "Control blocks must be a named, nonempty list.")
-  block_keys <- vapply(menu$control_blocks, function(x)
-    paste(sort(unique(c(menu$required_controls, unlist(x)))), collapse = "+"), "")
-  abort_if(anyDuplicated(block_keys) > 0L, "Redundant control blocks are not allowed.")
-  abort_if(any(!menu$sample_modes %in% c("available", "common")) ||
-             !length(menu$sample_modes) || anyDuplicated(menu$sample_modes) > 0L,
-           "Sample modes must be unique available/common choices.")
+  abort_if(!menu$estimator %in% estimators, paste("Supported estimators:", paste(estimators, collapse = ", ")))
+  dims <- menu_dimensions(menu)
+  abort_if(!length(dims), "Specify at least one choice dimension.")
+  names <- vapply(dims, function(d) d$name, "")
+  abort_if(anyDuplicated(names) > 0L || any(!grepl(simple_name, names)) || any(names %in% reserved_names),
+           "Dimension names must be unique simple identifiers and not reserved.")
+  for (d in dims) {
+    ids <- vapply(d$options, function(o) o$id, "")
+    abort_if(!length(ids) || anyDuplicated(ids) > 0L, paste("Options must be unique and nonempty:", d$name))
+    abort_if(any(!nzchar(vapply(d$options, function(o) if (is.null(o$label)) "" else o$label, ""))),
+             paste("Every option needs a label:", d$name))
+  }
+  for (field in replacement_fields) {
+    setters <- vapply(dims, function(d) any(vapply(d$options, function(o) !is.null(o[[field]]), logical(1))), logical(1))
+    abort_if(sum(setters) > 1L, paste("Only one dimension may replace", field))
+  }
+  if (!is.null(menu$panel_by)) abort_if(!menu$panel_by %in% names, "panel_by must name a dimension.")
+  abort_if(any(!menu$sample_modes %in% c("available", "common")) || !length(menu$sample_modes) ||
+             anyDuplicated(menu$sample_modes) > 0L, "Sample modes must be unique available/common choices.")
+  if (menu$estimator == "time_series_mean")
+    abort_if(!identical(unlist(menu$sample_modes), "available"), "Time-series means use available samples only.")
   abort_if(!is.numeric(menu$confidence_level) || length(menu$confidence_level) != 1L ||
              !is.finite(menu$confidence_level) || menu$confidence_level <= 0 || menu$confidence_level >= 1,
            "Confidence level must be between zero and one.")
-  abort_if(!menu$preferred$control_block %in% names(menu$control_blocks) ||
-             !menu$preferred$sample_mode %in% menu$sample_modes,
-           "Preferred specification must be in the grid.")
-  abort_if(!is.numeric(data[[menu$outcome]]) || !is.numeric(data[[menu$treatment]]),
-           "This reference implementation requires numeric outcome and focal variables.")
-  abort_if(menu$outcome %in% c(menu$required_controls, unlist(menu$control_blocks)),
-           "The outcome cannot also be a control.")
+  abort_if(anyNA(data[[menu$row_id]]) || anyDuplicated(data[[menu$row_id]]) > 0L,
+           "Observation identifiers must be unique and nonmissing.")
+  for (rule in menu$exclusions) {
+    abort_if(is.null(rule$reason) || !nzchar(rule$reason), "Every exclusion needs a reason.")
+    abort_if(!all(names(rule$match) %in% c(names, "sample_mode")), "Exclusions must reference dimensions.")
+  }
+  built <- choice_grid(menu)
+  abort_if(!nrow(built$grid), "The menu excludes every specification.")
+  preferred <- menu$preferred
+  abort_if(!setequal(names(preferred), c(names, "sample_mode")),
+           "Preferred specification must choose every dimension and the sample mode.")
+  abort_if(sum(same_choice(built$grid, preferred)) != 1L, "Preferred specification must be in the grid.")
+  for (choice in menu$original_specifications) {
+    abort_if(!setequal(names(choice), c(names, "sample_mode")) || sum(same_choice(built$grid, choice)) != 1L,
+             "Every original specification must identify one grid row.")
+  }
+  signatures <- character(nrow(built$grid))
+  for (i in seq_len(nrow(built$grid))) {
+    spec <- resolve_spec(menu, built$grid[i, , drop = FALSE])
+    validate_vcov(menu, spec$vcov)
+    abort_if(is.null(spec$outcome) || (menu$estimator == "linear_fixed_effects" && is.null(spec$treatment)),
+             "Every specification needs an outcome and, for regressions, a focal variable.")
+    abort_if(spec$outcome %in% c(spec$controls, spec$treatment), "The outcome cannot also be a regressor.")
+    if (spec$unit_trend) abort_if(!menu$unit %in% spec$fixed_effects, "Unit trends require unit fixed effects.")
+    vars <- spec_variables(menu, spec)
+    abort_if(any(!grepl(simple_name, vars)), "Use simple variable names in the menu.")
+    abort_if(!all(vars %in% names(data)), paste("Menu references variables absent from input data:",
+             paste(setdiff(vars, names(data)), collapse = ", ")))
+    abort_if(!is.numeric(data[[spec$outcome]]) || (!is.null(spec$treatment) && !is.numeric(data[[spec$treatment]])),
+             "Outcome and focal variables must be numeric.")
+    for (f in spec$filters) abort_if(!f$op %in% filter_ops || is.null(f$value), "Unsupported filter.")
+    signatures[i] <- paste(model_formula(menu, spec), vcov_label(spec$vcov), spec$filter_signature,
+                           built$grid$sample_mode[i], sep = " | ")
+  }
+  abort_if(anyDuplicated(signatures) > 0L && !isTRUE(menu$allow_duplicate_models),
+           "Two grid rows define the same model and sample; remove the redundancy or declare it.")
   if (menu$analysis_kind == "application") {
     ref <- menu$reference
     abort_if(is.null(ref) || !is.numeric(ref$estimate) || length(ref$estimate) != 1L ||
@@ -55,22 +220,24 @@ validate_menu <- function(menu, data) {
                is.null(ref$source) || !nzchar(ref$source),
              "Applications require a published baseline estimate, tolerance, and source.")
   }
-  invisible(vars)
+  invisible(built)
 }
 
 freeze_manifest <- function(menu, data, root, path) {
-  validate_menu(menu, data)
+  built <- validate_menu(menu, data)
   abort_if(file.exists(path) || file.exists(paste0(path, ".sha256")),
            "Manifest already exists; create a new version rather than overwriting it.")
-  grid <- expand.grid(control_block = names(menu$control_blocks),
-                      sample_mode = menu$sample_modes, stringsAsFactors = FALSE)
-  grid$spec_id <- sprintf("S%03d", seq_len(nrow(grid)))
-  grid$preferred <- grid$control_block == menu$preferred$control_block &
-    grid$sample_mode == menu$preferred$sample_mode
-  manifest <- list(schema_version = 1L, menu = menu,
+  grid <- built$grid
+  rownames(grid) <- NULL
+  grid$spec_id <- sprintf("S%04d", seq_len(nrow(grid)))
+  grid$preferred <- same_choice(grid, menu$preferred)
+  grid$original <- grid$preferred
+  for (choice in menu$original_specifications) grid$original <- grid$original | same_choice(grid, choice)
+  manifest <- list(schema_version = 2L, menu = menu,
                    created_utc = format(Sys.time(), "%Y-%m-%dT%H:%M:%SZ", tz = "UTC"),
                    expected_rows = nrow(grid), input_hash = sha256(data),
-                   source_hashes = as.list(source_hashes(root)), grid = grid)
+                   source_hashes = as.list(source_hashes(root)), grid = grid,
+                   excluded = built$excluded)
   dir.create(dirname(path), recursive = TRUE, showWarnings = FALSE)
   jsonlite::write_json(manifest, path, pretty = TRUE, auto_unbox = TRUE, null = "null", digits = NA)
   writeLines(file_sha256(path), paste0(path, ".sha256"))
@@ -82,6 +249,7 @@ read_manifest <- function(path, data, root) {
   hash <- file_sha256(path)
   abort_if(!identical(hash, readLines(paste0(path, ".sha256"), warn = FALSE)), "Frozen manifest was modified.")
   manifest <- jsonlite::read_json(path, simplifyVector = TRUE)
+  manifest$menu <- jsonlite::read_json(path, simplifyVector = FALSE)$menu
   validate_menu(manifest$menu, data)
   abort_if(!identical(manifest$input_hash, sha256(data)), "Input data differ from the frozen manifest.")
   current <- source_hashes(root)
@@ -94,30 +262,85 @@ read_manifest <- function(path, data, root) {
   manifest
 }
 
-spec_variables <- function(menu, block) {
-  unique(c(menu$outcome, menu$treatment, menu$required_controls,
-           unlist(menu$control_blocks[[block]], use.names = FALSE),
-           menu$fixed_effects, menu$cluster, menu$unit, menu$time, menu$row_id))
+apply_filters <- function(data, filters) {
+  keep <- rep(TRUE, nrow(data))
+  for (f in filters) {
+    x <- data[[f$variable]]
+    hit <- switch(f$op,
+      "==" = x == f$value, "!=" = x != f$value, ">=" = x >= f$value, "<=" = x <= f$value,
+      ">" = x > f$value, "<" = x < f$value, "in" = x %in% f$value, "not_in" = !(x %in% f$value))
+    keep <- keep & !is.na(hit) & hit
+  }
+  keep
+}
+
+newey_west_se <- function(y, lags) {
+  n <- length(y)
+  u <- y - mean(y)
+  s <- sum(u^2) / n
+  if (lags > 0L) for (l in seq_len(min(lags, n - 1L)))
+    s <- s + 2 * (1 - l / (lags + 1)) * sum(u[(l + 1):n] * u[seq_len(n - l)]) / n
+  sqrt(s / n)
+}
+
+estimate_time_series_mean <- function(menu, spec, frame) {
+  abort_if(length(unique(frame[[menu$unit]])) != 1L, "A time-series mean needs exactly one series.")
+  abort_if(anyDuplicated(frame[[menu$time]]) > 0L, "Duplicate periods in a time series.")
+  frame <- frame[order(frame[[menu$time]]), , drop = FALSE]
+  y <- frame[[spec$outcome]]
+  n <- length(y)
+  abort_if(n < 3L, "Fewer than three periods.")
+  se <- if (spec$vcov$type == "iid") stats::sd(y) / sqrt(n) else newey_west_se(y, as.integer(spec$vcov$lags))
+  estimate <- mean(y)
+  statistic <- estimate / se
+  critical <- stats::qt(1 - (1 - menu$confidence_level) / 2, df = n - 1L)
+  list(estimate = estimate, std_error = se, statistic = statistic,
+       p_value = 2 * stats::pt(-abs(statistic), df = n - 1L),
+       ci_lower = estimate - critical * se, ci_upper = estimate + critical * se,
+       n_obs = n, used = frame, dropped_terms = "", n_clusters = NA_integer_)
+}
+
+estimate_fixed_effects <- function(menu, spec, frame, formula_text) {
+  vcov <- switch(spec$vcov$type, cluster = stats::as.formula(paste("~", spec$vcov$cluster)),
+                 iid = "iid", hetero = "hetero")
+  model <- fixest::feols(stats::as.formula(formula_text), data = frame, vcov = vcov,
+    ssc = fixest::ssc(K.adj = TRUE, K.fixef = "nonnested", G.adj = TRUE, t.df = "min"),
+    notes = FALSE, warn = FALSE, nthreads = 1L)
+  table <- fixest::coeftable(model)
+  abort_if(!spec$treatment %in% rownames(table), "Focal coefficient is unidentified or absorbed.")
+  abort_if(any(unlist(menu$base$required_controls) %in% model$collin.var),
+           "A required control is unidentified or absorbed.")
+  interval <- stats::confint(model, parm = spec$treatment, level = menu$confidence_level)
+  used <- frame[fixest::obs(model), , drop = FALSE]
+  list(estimate = unname(table[spec$treatment, 1L]), std_error = unname(table[spec$treatment, 2L]),
+       statistic = unname(table[spec$treatment, 3L]), p_value = unname(table[spec$treatment, 4L]),
+       ci_lower = unname(interval[1L, 1L]), ci_upper = unname(interval[1L, 2L]),
+       n_obs = stats::nobs(model), used = used, dropped_terms = paste(model$collin.var, collapse = ";"),
+       n_clusters = if (spec$vcov$type == "cluster") length(unique(used[[spec$vcov$cluster]])) else NA_integer_)
 }
 
 run_manifest <- function(manifest, data) {
   menu <- manifest$menu
   validate_menu(menu, data)
   abort_if(!identical(manifest$input_hash, sha256(data)), "Input data changed after freezing.")
-  common_vars <- unique(unlist(lapply(names(menu$control_blocks), function(block) spec_variables(menu, block))))
+  grid <- manifest$grid
+  dims <- dimension_names(menu)
+  specs <- lapply(seq_len(nrow(grid)), function(i) resolve_spec(menu, grid[i, , drop = FALSE]))
+  common_vars <- unique(unlist(lapply(specs, function(spec) spec_variables(menu, spec))))
   common <- stats::complete.cases(data[, common_vars, drop = FALSE])
-  rows <- lapply(seq_len(nrow(manifest$grid)), function(i) {
-    spec <- manifest$grid[i, , drop = FALSE]
-    controls <- unique(c(menu$required_controls, unlist(menu$control_blocks[[spec$control_block]])))
-    vars <- spec_variables(menu, spec$control_block)
-    selected <- if (spec$sample_mode == "common") common else stats::complete.cases(data[, vars, drop = FALSE])
-    frame <- data[selected, , drop = FALSE]
-    rhs <- paste(c(menu$treatment, controls), collapse = " + ")
-    formula_text <- paste(menu$outcome, "~", rhs)
-    if (length(menu$fixed_effects)) formula_text <- paste(formula_text, "|", paste(menu$fixed_effects, collapse = " + "))
-    row <- cbind(spec, data.frame(formula = formula_text, estimator = menu$estimator, outcome = menu$outcome,
-      treatment = menu$treatment, clustering = menu$cluster, confidence_level = menu$confidence_level,
-      status = "failed", error = "", estimate = NA_real_, std_error = NA_real_, p_value = NA_real_,
+  rows <- lapply(seq_len(nrow(grid)), function(i) {
+    spec <- specs[[i]]
+    vars <- spec_variables(menu, spec)
+    complete <- if (grid$sample_mode[i] == "common") common else stats::complete.cases(data[, vars, drop = FALSE])
+    frame <- data[complete & apply_filters(data, spec$filters), , drop = FALSE]
+    formula_text <- model_formula(menu, spec)
+    row <- cbind(grid[i, , drop = FALSE], data.frame(panel = spec$panel, formula = formula_text,
+      estimator = menu$estimator, outcome = spec$outcome,
+      treatment = if (is.null(spec$treatment)) "(intercept)" else spec$treatment,
+      control_vars = paste(spec$controls, collapse = ";"), fixed_effect_terms = paste(spec$fixed_effects, collapse = ";"),
+      unit_trend = spec$unit_trend, vcov = vcov_label(spec$vcov), filters = spec$filter_signature,
+      confidence_level = menu$confidence_level, status = "failed", error = "",
+      estimate = NA_real_, std_error = NA_real_, statistic = NA_real_, p_value = NA_real_,
       ci_lower = NA_real_, ci_upper = NA_real_, n_input = nrow(data), n_eligible = nrow(frame),
       n_obs = NA_integer_, n_units = NA_integer_, n_periods = NA_integer_, n_clusters = NA_integer_,
       n_estimator_dropped = NA_integer_, sample_hash = NA_character_, dropped_terms = "",
@@ -125,29 +348,17 @@ run_manifest <- function(manifest, data) {
       stringsAsFactors = FALSE))
     tryCatch({
       abort_if(!nrow(frame), "No complete observations.")
-      model <- fixest::feols(stats::as.formula(formula_text), data = frame,
-        vcov = stats::as.formula(paste("~", menu$cluster)),
-        ssc = fixest::ssc(K.adj = TRUE, K.fixef = "nonnested", G.adj = TRUE, t.df = "min"),
-        notes = FALSE, warn = FALSE, nthreads = 1L)
-      table <- fixest::coeftable(model)
-      abort_if(!menu$treatment %in% rownames(table), "Focal coefficient is unidentified or absorbed.")
-      row$dropped_terms <- paste(model$collin.var, collapse = ";")
-      abort_if(any(menu$required_controls %in% model$collin.var), "A required control is unidentified or absorbed.")
-      interval <- stats::confint(model, parm = menu$treatment, level = menu$confidence_level)
-      used <- frame[fixest::obs(model), , drop = FALSE]
-      row$estimate <- unname(table[menu$treatment, 1L])
-      row$std_error <- unname(table[menu$treatment, 2L])
-      row$p_value <- unname(table[menu$treatment, 4L])
-      row$ci_lower <- unname(interval[1L, 1L])
-      row$ci_upper <- unname(interval[1L, 2L])
-      row$n_obs <- stats::nobs(model)
-      row$n_units <- length(unique(used[[menu$unit]]))
-      row$n_periods <- length(unique(used[[menu$time]]))
-      row$n_clusters <- length(unique(used[[menu$cluster]]))
+      fit <- if (menu$estimator == "time_series_mean") estimate_time_series_mean(menu, spec, frame) else
+        estimate_fixed_effects(menu, spec, frame, formula_text)
+      for (field in c("estimate", "std_error", "statistic", "p_value", "ci_lower", "ci_upper", "n_obs",
+                      "dropped_terms", "n_clusters")) row[[field]] <- fit[[field]]
+      row$n_units <- length(unique(fit$used[[menu$unit]]))
+      row$n_periods <- length(unique(fit$used[[menu$time]]))
       row$n_estimator_dropped <- nrow(frame) - row$n_obs
-      row$sample_hash <- sha256(sort(as.character(used[[menu$row_id]])))
-      abort_if(row$n_clusters < 2L || any(!is.finite(unlist(row[c("estimate", "std_error", "p_value", "ci_lower", "ci_upper")]))),
-               "Uncertainty is not finite or fewer than two clusters remain.")
+      row$sample_hash <- sample_sha256(fit$used[[menu$row_id]])
+      abort_if(any(!is.finite(unlist(row[c("estimate", "std_error", "p_value", "ci_lower", "ci_upper")]))),
+               "Uncertainty is not finite.")
+      abort_if(spec$vcov$type == "cluster" && row$n_clusters < 2L, "Fewer than two clusters remain.")
       row$status <- "ok"
     }, error = function(e) {
       row$error <<- conditionMessage(e)
@@ -159,34 +370,44 @@ run_manifest <- function(manifest, data) {
 
 validate_results <- function(manifest, results) {
   grid <- manifest$grid
+  menu <- manifest$menu
   abort_if(anyDuplicated(results$spec_id) > 0L || nrow(results) != manifest$expected_rows ||
              !setequal(results$spec_id, grid$spec_id), "Results must contain exactly one row for every manifest ID.")
   results <- results[match(grid$spec_id, results$spec_id), , drop = FALSE]
-  for (field in names(grid)) abort_if(!identical(results[[field]], grid[[field]]), paste("Specification labels changed:", field))
-  abort_if(anyNA(results[, c("manifest_hash", "input_hash", "estimator", "outcome", "treatment", "clustering", "confidence_level", "status")]),
+  for (field in names(grid)) abort_if(!identical(as.vector(results[[field]]), as.vector(grid[[field]])),
+                                      paste("Specification labels changed:", field))
+  abort_if(anyNA(results[, c("manifest_hash", "input_hash", "estimator", "outcome", "treatment", "vcov",
+                             "confidence_level", "status")]),
            "Result provenance and conventions must be nonmissing.")
   abort_if(any(results$manifest_hash != manifest$manifest_hash) || any(results$input_hash != manifest$input_hash),
            "Result provenance does not match the frozen manifest.")
-  for (field in c("estimator", "outcome", "treatment", "clustering", "confidence_level")) {
-    expected <- if (field == "clustering") manifest$menu$cluster else manifest$menu[[field]]
-    abort_if(any(results[[field]] != expected), paste("Result convention changed:", field))
+  for (i in seq_len(nrow(grid))) {
+    spec <- resolve_spec(menu, grid[i, , drop = FALSE])
+    abort_if(results$outcome[i] != spec$outcome || results$vcov[i] != vcov_label(spec$vcov) ||
+               results$estimator[i] != menu$estimator || results$confidence_level[i] != menu$confidence_level ||
+               results$formula[i] != model_formula(menu, spec) || results$filters[i] != spec$filter_signature,
+             paste("Result convention changed for", grid$spec_id[i]))
   }
   abort_if(any(!results$status %in% c("ok", "failed")), "Every result needs an explicit status.")
   failed <- results$status == "failed"
   abort_if(any(failed & !nzchar(results$error)), "Failed specifications need an explicit reason.")
-  for (field in c("estimate", "std_error", "p_value", "ci_lower", "ci_upper", "n_obs", "n_clusters",
+  for (field in c("estimate", "std_error", "p_value", "ci_lower", "ci_upper", "n_obs",
                   "n_eligible", "n_units", "n_periods", "n_estimator_dropped")) {
     abort_if(any(!is.finite(results[[field]][!failed])), paste("Successful rows have invalid", field))
   }
   ok <- results[!failed, , drop = FALSE]
   abort_if(anyNA(ok$sample_hash) || any(!grepl("^[0-9a-f]{64}$", ok$sample_hash)), "Successful rows need observation hashes.")
   abort_if(any(ok$std_error < 0 | ok$p_value < 0 | ok$p_value > 1 | ok$ci_lower > ok$estimate |
-                 ok$ci_upper < ok$estimate | ok$n_obs <= 0 | ok$n_clusters < 2), "Invalid uncertainty or sample size.")
+                 ok$ci_upper < ok$estimate | ok$n_obs <= 0), "Invalid uncertainty or sample size.")
+  clustered <- grepl("^cluster", ok$vcov)
+  abort_if(any(!is.finite(ok$n_clusters[clustered]) | ok$n_clusters[clustered] < 2), "Clustered rows need clusters.")
   common <- ok[ok$sample_mode == "common", , drop = FALSE]
-  abort_if(length(unique(common$sample_hash)) > 1L, "Common-sample specifications used different observations.")
+  for (signature in unique(common$filters))
+    abort_if(length(unique(common$sample_hash[common$filters == signature])) > 1L,
+             "Common-sample specifications used different observations.")
   preferred <- results[results$preferred, , drop = FALSE]
   baseline <- "not_applicable_synthetic_demo"
-  reference <- manifest$menu$reference
+  reference <- menu$reference
   if (!is.null(reference)) {
     abort_if(preferred$status != "ok" || abs(preferred$estimate - reference$estimate) > reference$tolerance,
              "Preferred specification does not reproduce the documented published baseline.")
@@ -195,4 +416,59 @@ validate_results <- function(manifest, results) {
   list(passed = !any(failed), expected_rows = manifest$expected_rows, completed_rows = sum(!failed),
        failed_ids = as.list(results$spec_id[failed]), baseline_reproduction = baseline,
        manifest_hash = manifest$manifest_hash, joint_inference = "not_implemented")
+}
+
+summarise_results <- function(manifest, results) {
+  alpha <- 1 - manifest$menu$confidence_level
+  ok <- results[results$status == "ok", , drop = FALSE]
+  groups <- split(ok, list(ok$panel, ok$sample_mode), drop = TRUE)
+  do.call(rbind, lapply(groups, function(rows) {
+    baseline <- rows$estimate[rows$preferred]
+    data.frame(panel = rows$panel[1L], sample_mode = rows$sample_mode[1L], specifications = nrow(rows),
+      median_estimate = stats::median(rows$estimate), minimum_estimate = min(rows$estimate),
+      maximum_estimate = max(rows$estimate), fraction_positive = mean(rows$estimate > 0),
+      fraction_significant_positive = mean(rows$p_value < alpha & rows$estimate > 0),
+      fraction_significant_negative = mean(rows$p_value < alpha & rows$estimate < 0),
+      preferred_estimate = if (length(baseline)) baseline else NA_real_,
+      preferred_percentile = if (length(baseline)) mean(rows$estimate <= baseline) else NA_real_,
+      interpretation = "Descriptive within the specified set; not a hypothesis probability",
+      row.names = NULL, stringsAsFactors = FALSE)
+  }))
+}
+
+# A language-neutral execution plan for other runtimes (e.g. Stata): one row per
+# frozen specification with every resolved model element spelled out.
+stata_filter <- function(filters, data) {
+  if (!length(filters)) return("1")
+  quote <- function(variable, value) if (is.character(data[[variable]])) paste0('"', value, '"') else
+    format(value, scientific = FALSE, trim = TRUE)
+  parts <- vapply(filters, function(f) {
+    values <- vapply(f$value, function(v) quote(f$variable, v), "")
+    switch(f$op,
+      "in" = paste0("inlist(", f$variable, ", ", paste(values, collapse = ", "), ")"),
+      "not_in" = paste0("!inlist(", f$variable, ", ", paste(values, collapse = ", "), ")"),
+      paste0("(", f$variable, " ", f$op, " ", values[1L], " & !missing(", f$variable, "))"))
+  }, "")
+  paste(parts, collapse = " & ")
+}
+
+execution_plan <- function(manifest, data) {
+  menu <- manifest$menu
+  grid <- manifest$grid
+  specs <- lapply(seq_len(nrow(grid)), function(i) resolve_spec(menu, grid[i, , drop = FALSE]))
+  common_vars <- unique(unlist(lapply(specs, function(spec) spec_variables(menu, spec))))
+  do.call(rbind, lapply(seq_len(nrow(grid)), function(i) {
+    spec <- specs[[i]]
+    data.frame(spec_id = grid$spec_id[i], sample_mode = grid$sample_mode[i], panel = spec$panel,
+      estimator = menu$estimator, outcome = spec$outcome,
+      treatment = if (is.null(spec$treatment)) "" else spec$treatment,
+      controls = paste(spec$controls, collapse = " "), fixed_effects = paste(spec$fixed_effects, collapse = " "),
+      unit_trend = as.integer(spec$unit_trend), unit = menu$unit, time = menu$time, row_id = menu$row_id,
+      vcov_type = spec$vcov$type, cluster = if (is.null(spec$vcov$cluster)) "" else spec$vcov$cluster,
+      lags = if (is.null(spec$vcov$lags)) NA_integer_ else as.integer(spec$vcov$lags),
+      confidence_level = menu$confidence_level, filters = spec$filter_signature,
+      stata_if = stata_filter(spec$filters, data),
+      sample_vars = paste(if (grid$sample_mode[i] == "common") common_vars else spec_variables(menu, spec), collapse = " "),
+      formula = model_formula(menu, spec), vcov = vcov_label(spec$vcov), stringsAsFactors = FALSE)
+  }))
 }

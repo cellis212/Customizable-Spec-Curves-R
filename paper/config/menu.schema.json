@@ -1,0 +1,123 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/cellis212/Customizable-Spec-Curves-R/paper/config/menu.schema.json",
+  "title": "Specification-curve menu, schema version 2",
+  "description": "Declares one economic question, a base model, and the choice dimensions whose Cartesian product (minus documented exclusions) is the frozen specification grid. The R and Python engines enforce further semantic rules: variables must exist in the input, only one dimension may replace each model field, the preferred and original specifications must be grid rows, and no two rows may define the same model and sample.",
+  "type": "object",
+  "required": ["schema_version", "version", "analysis_kind", "estimator", "title", "estimand", "row_id", "unit", "time",
+               "base", "confidence_level", "dimensions", "sample_modes", "preferred"],
+  "additionalProperties": false,
+  "properties": {
+    "schema_version": {"const": 2},
+    "version": {"type": "string", "minLength": 1, "description": "Menu version. Any change after freezing requires a new version."},
+    "analysis_kind": {"enum": ["synthetic_demo", "application"]},
+    "estimator": {"enum": ["linear_fixed_effects", "time_series_mean"]},
+    "title": {"type": "string", "minLength": 1},
+    "estimand": {"type": "string", "minLength": 1, "description": "The economic question and units held fixed across the grid."},
+    "estimate_label": {"type": "string", "description": "Axis label for the estimate, in economic units."},
+    "row_id": {"$ref": "#/$defs/variable", "description": "Unique, nonmissing observation identifier."},
+    "unit": {"$ref": "#/$defs/variable", "description": "Cross-sectional unit (or series identifier for time-series means)."},
+    "time": {"$ref": "#/$defs/variable"},
+    "base": {"$ref": "#/$defs/base"},
+    "confidence_level": {"type": "number", "exclusiveMinimum": 0, "exclusiveMaximum": 1},
+    "dimensions": {"type": "array", "minItems": 1, "items": {"$ref": "#/$defs/dimension"}},
+    "panel_by": {"type": ["string", "null"], "description": "Dimension whose options define separate estimand panels with their own scales."},
+    "sample_modes": {"type": "array", "minItems": 1, "uniqueItems": true, "items": {"enum": ["available", "common"]}},
+    "exclusions": {"type": "array", "items": {"$ref": "#/$defs/exclusion"}},
+    "preferred": {"$ref": "#/$defs/choice", "description": "The published baseline: one option per dimension plus sample_mode."},
+    "original_specifications": {"type": "array", "items": {"$ref": "#/$defs/choice"},
+                                "description": "Other grid rows that the original article reported."},
+    "reference": {
+      "type": ["object", "null"],
+      "required": ["estimate", "tolerance", "source"],
+      "properties": {
+        "estimate": {"type": "number"},
+        "std_error": {"type": "number"},
+        "tolerance": {"type": "number", "minimum": 0},
+        "source": {"type": "string", "minLength": 1}
+      },
+      "description": "Required for applications: the published estimate the preferred specification must reproduce."
+    },
+    "allow_duplicate_models": {"type": "boolean"},
+    "joint_inference": {"const": "not_implemented"},
+    "figure": {"type": "object", "properties": {"width": {"type": "number"}, "height": {"type": "number"}}},
+    "notes": {"type": "string"},
+    "seed": {"type": "integer"}
+  },
+  "$defs": {
+    "variable": {"type": "string", "pattern": "^[A-Za-z][A-Za-z0-9_]*$"},
+    "variables": {"type": "array", "items": {"$ref": "#/$defs/variable"}},
+    "vcov": {
+      "type": "object",
+      "required": ["type"],
+      "properties": {
+        "type": {"enum": ["cluster", "iid", "hetero", "newey_west"]},
+        "cluster": {"$ref": "#/$defs/variable"},
+        "lags": {"type": "integer", "minimum": 0}
+      },
+      "additionalProperties": false
+    },
+    "filter": {
+      "type": "object",
+      "required": ["variable", "op", "value"],
+      "properties": {
+        "variable": {"$ref": "#/$defs/variable"},
+        "op": {"enum": ["==", "!=", ">=", "<=", ">", "<", "in", "not_in"]},
+        "value": {}
+      },
+      "additionalProperties": false
+    },
+    "base": {
+      "type": "object",
+      "required": ["outcome", "vcov"],
+      "properties": {
+        "outcome": {"$ref": "#/$defs/variable"},
+        "treatment": {"$ref": "#/$defs/variable"},
+        "required_controls": {"$ref": "#/$defs/variables"},
+        "fixed_effects": {"$ref": "#/$defs/variables"},
+        "unit_trend": {"type": "boolean"},
+        "vcov": {"$ref": "#/$defs/vcov"},
+        "filters": {"type": "array", "items": {"$ref": "#/$defs/filter"}}
+      },
+      "additionalProperties": false
+    },
+    "option": {
+      "type": "object",
+      "required": ["id", "label"],
+      "properties": {
+        "id": {"type": "string", "minLength": 1},
+        "label": {"type": "string", "minLength": 1},
+        "justification": {"type": "string", "description": "Why a careful analyst could choose this option for the same question."},
+        "outcome": {"$ref": "#/$defs/variable"},
+        "treatment": {"$ref": "#/$defs/variable"},
+        "add_controls": {"$ref": "#/$defs/variables"},
+        "fixed_effects": {"$ref": "#/$defs/variables"},
+        "unit_trend": {"type": "boolean"},
+        "vcov": {"$ref": "#/$defs/vcov"},
+        "filters": {"type": "array", "items": {"$ref": "#/$defs/filter"}}
+      },
+      "additionalProperties": false
+    },
+    "dimension": {
+      "type": "object",
+      "required": ["name", "options"],
+      "properties": {
+        "name": {"$ref": "#/$defs/variable"},
+        "label": {"type": "string"},
+        "justification": {"type": "string"},
+        "options": {"type": "array", "minItems": 1, "items": {"$ref": "#/$defs/option"}}
+      },
+      "additionalProperties": false
+    },
+    "choice": {"type": "object", "additionalProperties": {"type": "string"}, "required": ["sample_mode"]},
+    "exclusion": {
+      "type": "object",
+      "required": ["match", "reason"],
+      "properties": {
+        "match": {"type": "object", "additionalProperties": {"oneOf": [{"type": "string"}, {"type": "array", "items": {"type": "string"}}]}},
+        "reason": {"type": "string", "minLength": 1}
+      },
+      "additionalProperties": false
+    }
+  }
+}

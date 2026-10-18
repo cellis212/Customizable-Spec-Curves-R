@@ -1,3 +1,0 @@
-# Constructing and reading a specification curve
-
-*Methods exposition pending.*

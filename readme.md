@@ -1,55 +1,55 @@
 # Specification Curve Analysis in R
 
-## Paper workflow
+## Specification curves built with an AI assistant
 
-This repository also contains the source for *Specification Curves in Empirical Finance: A Practical Guide*. The `paper/` directory provides a manuscript scaffold and a small, runnable reference workflow alongside the original customizable scripts below.
+This repository contains the code for *Specification Curves in Empirical Finance: A Practical Guide for AI-Assisted Research* (the manuscript itself is not distributed here). It is designed so that an AI coding assistant (Claude Code, Codex, Cursor, Copilot, ...) writes most of the code while the researcher makes the design decisions and the software enforces the rules that make the result trustworthy.
 
-The new workflow currently supports linear fixed-effects models with one-way cluster-robust, pointwise confidence intervals. It compares available and common samples, preserves required controls, records failed specifications, and validates each result against a manifest frozen before estimation. It does not implement joint specification-curve inference. The two empirical application slots are unselected; the runnable demonstration uses generated data and establishes no empirical finding.
+**Start here:** [`docs/ai-guide.md`](docs/ai-guide.md) is a runbook for researchers and their assistants, with ready-to-paste prompts in [`docs/prompts/`](docs/prompts/) and a drop-in instructions file in [`docs/templates/agent-instructions.md`](docs/templates/agent-instructions.md).
 
-From the repository root:
+### How it works
 
-```sh
-make setup        # Install local commit/push checks and check R dependencies
-make restore      # Restore the R package versions recorded in renv.lock
-make check        # Check publication rules and scientific workflow invariants
-make demo         # Run the complete generated-data example
-make manuscript   # Compile the manuscript scaffold with Quarto and TeX
-```
+1. The assistant writes a script that builds one analysis CSV and drafts a declarative `menu.json` ([schema](paper/config/menu.schema.json)): the base model, each decision with its options and justifications, excluded combinations, the published baseline with a tolerance, and the specifications the original article reported.
+2. `validate` checks the menu against the data without estimating anything.
+3. `freeze` writes the full grid with hashes of the data and analysis code. `estimate` refuses to run if any of them changed, keeps every specification (failures included), refuses to draw figures unless the published baseline reproduces, and records sample identities and counts.
+4. A second implementation can be compared row by row with `tools/compare_implementations.py`.
 
-R 4.5.1 and the dependency versions in `renv.lock` were used for setup. The lockfile covers the new paper workflow; the original examples retain their separate package requirements below. The manuscript build also requires Quarto and a TeX installation. Run `make restore` if required R packages are missing. Generated demonstration files go under the ignored `local/output/` directory, or the directory specified by `SPEC_CURVES_OUTPUT_DIR`. The manuscript PDF goes under the ignored `paper/manuscript/output/` directory.
+| Language | Engine | Status |
+|---|---|---|
+| R (reference) | `paper/R/`, `paper/run.R` (fixest) | Tested; reference for both applications |
+| Python | `python/speccurve/` (PyFixest) | Tested; agrees with R on all 602 application specifications |
+| Stata | `stata/speccurve_run.do` (reghdfe), runs a plan exported by R | Provided; not yet run against R |
 
-The source layout is:
+Supported estimators: linear models with any number of fixed effects (clustered, heteroskedasticity-robust, or i.i.d. errors; optional unit-specific linear trends) and means of a single time series such as a long-short portfolio return (i.i.d. or Newey-West errors). Joint specification-curve inference, multiway clustering, and nonlinear or heterogeneity-robust staggered-adoption estimators are not implemented; treat them as separate analyses.
 
-- `paper/run.R`: dependency checks, manifest freezing, estimation, validation, and rendering.
-- `paper/R/`: model, sample, provenance, and plotting functions.
-- `paper/config/demo.json`: the generated-data specification menu.
-- `paper/config/applications.json`: the two unselected application slots.
-- `paper/scripts/acquire_mitton_materials.py`: preserve a public source download with URL, retrieval time, content type, size, and SHA-256 provenance.
-- `paper/tests/`: checks for missing/duplicated rows, changed inputs/manifests, common samples, unidentified coefficients, and baseline reproduction.
-- `paper/manuscript/`: Quarto source, section files, and verified seed references.
-
-For an empirical application, construct a justified application-specific menu using the demo schema, set `analysis_kind` to `application`, and supply `reference` with the published `estimate`, an absolute numerical `tolerance`, and a precise `source`. Required controls, fixed effects, and clustering remain fixed. The supported menu varies control blocks and available/common samples only. A new design or estimator needs a separately checked implementation. The preferred specification must reproduce its documented baseline before figures can be assembled.
+### Commands
 
 ```sh
-Rscript paper/run.R freeze /path/to/menu.json /path/to/input.csv /path/to/manifest.json
-Rscript paper/run.R estimate /path/to/manifest.json /path/to/input.csv /path/to/new-run
+make setup        # install commit/push checks; check R dependencies
+make restore      # restore the R packages recorded in renv.lock
+make python-env   # create python/.venv with the Python port (requires uv)
+make check        # publication policy, R workflow checks, Python tests
+make demo         # synthetic-data demonstration (not an empirical result)
+
+Rscript paper/run.R validate MENU.json INPUT.csv
+Rscript paper/run.R freeze   MENU.json INPUT.csv MANIFEST.json
+Rscript paper/run.R estimate MANIFEST.json INPUT.csv RUN_DIR
+Rscript paper/run.R plan     MANIFEST.json INPUT.csv PLAN.csv     # for Stata
+python -m speccurve run MENU.json INPUT.csv RUN_DIR
+python3 tools/compare_implementations.py RUN_DIR/results.csv OTHER_RUN/results.csv
 ```
 
-Freezing saves the complete grid, input hash, and analysis-source hashes. Keep the manifest and its `.sha256` sidecar together. A changed menu, input, or analysis source requires a new manifest version. CSV input is converted to an R data frame before hashing; keep variable types and input conventions stable between freezing and estimation. Failed or unidentified specifications remain in the results, block assembly, and must be addressed explicitly. Summary fractions are descriptive properties of the chosen set; pointwise intervals do not provide joint inference.
+### The paper's applications
 
-To preserve an observed public article, code archive, or source document locally, use the acquisition helper (Python 3 and `curl` required):
+- [`paper/applications/bll2010`](paper/applications/bll2010/): Beck, Levine and Levkov (2010), bank branch deregulation and income inequality (324 specifications).
+- [`paper/applications/cz_am`](paper/applications/cz_am/): the Fama and French (1992) assets-to-market anomaly using Chen and Zimmermann's open-source portfolios (20 specifications).
+- [`paper/applications/cz_bliq`](paper/applications/cz_bliq/): the Pastor and Stambaugh (2003) liquidity beta, whose original construction is value-weighted (18 specifications).
+- [`paper/applications/btmr2021`](paper/applications/btmr2021/): Bednarek, te Kaat, Ma and Rebucci (2021), whose authors call their Table 3 columns 7-8 the most conservative specifications (240 specifications).
 
-```sh
-python3 paper/scripts/acquire_mitton_materials.py \
-  --url 'https://www.liuyanecon.com/wp-content/uploads/Mitton-2022a.pdf' \
-  --destination /path/to/local-materials/mitton-published.pdf \
-  --kind pdf \
-  --source-title 'Mitton (2022), published RFS article'
-```
+Each folder documents where to download the public data (not redistributed here), the expected SHA-256 hashes, and the frozen menu. `sh paper/reproduce.sh RAW_DIR WORK_DIR` rebuilds the inputs, estimates the curves, cross-checks R against Python, and draws the figures and tables used in the paper.
 
-The helper rejects an unexpected PDF/ZIP response, preserves original bytes, and verifies an existing file against its provenance before reusing it. Keep its download and adjacent `.provenance.json` file outside the source checkout. It does not establish source rights, obtain licensed databases, or execute downloaded code. Downloading the article does not obtain its replication code. Only a verified original package should be described as original replication code.
+R 4.5.1 with the packages in `renv.lock` and Python 3.11 with `python/pyproject.toml` were used. Data, generated outputs, and the manuscript stay outside version control: a deny-by-default `.gitignore` and commit/push checks allow only source code, menus, and documentation.
 
-New commits use an explicit source allowlist, checked by local commit/push hooks and continuous integration. Data, generated figures/tables/PDFs, run records, transcripts, and project planning files are excluded. The three original public images below are retained unchanged. The checks are guardrails; review the staged diff before publishing source.
+To preserve a public source document with provenance, use `paper/scripts/acquire_mitton_materials.py` (Python 3 and `curl`), which records URL, retrieval time, size, and SHA-256 and verifies cached files before reuse.
 
 ## Original customizable examples
 

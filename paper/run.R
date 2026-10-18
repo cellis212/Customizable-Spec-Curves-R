@@ -22,30 +22,54 @@ if (length(missing)) stop("Missing packages: ", paste(missing, collapse = ", "),
 for (file in c("curve.R", "demo.R", "plot.R")) source(file.path(root, "paper/R", file))
 
 if (command == "check") {
-  manuscript <- yaml::read_yaml(file.path(root, "paper/manuscript/_quarto.yml"))
-  abort_if(!identical(names(manuscript$format), "pdf"), "The manuscript build must use PDF output only.")
   cat(R.version.string, "\n")
   for (package in packages) cat(package, as.character(utils::packageVersion(package)), "\n")
-  slots <- jsonlite::read_json(file.path(root, "paper/config/applications.json"), simplifyVector = TRUE)
-  cat("Application slots:", nrow(slots$applications), "(no empirical results are implied).\n")
+  apps <- jsonlite::read_json(file.path(root, "paper/config/applications.json"), simplifyVector = TRUE)
+  cat("Configured applications:", paste(apps$applications$id, collapse = ", "), "\n")
+  quit(status = 0L)
+}
+
+if (command == "validate") {
+  if (length(args) != 3L) stop("Usage: Rscript paper/run.R validate MENU.json INPUT.csv")
+  menu <- read_menu(args[2L])
+  data <- utils::read.csv(args[3L], stringsAsFactors = FALSE, check.names = FALSE)
+  built <- validate_menu(menu, data)
+  panels <- vapply(seq_len(nrow(built$grid)), function(i) resolve_spec(menu, built$grid[i, , drop = FALSE])$panel, "")
+  cat("Menu", menu$version, "is valid. Nothing was estimated.\n")
+  cat("Specifications:", nrow(built$grid), "| excluded combinations:", nrow(built$excluded), "\n")
+  for (panel in unique(panels)) cat("  Panel", shQuote(panel), ":", sum(panels == panel), "specifications\n")
+  for (d in menu_dimensions(menu)) cat("  Dimension", d$name, ":", length(d$options), "options\n")
+  quit(status = 0L)
+}
+
+if (command == "plan") {
+  if (length(args) != 4L) stop("Usage: Rscript paper/run.R plan MANIFEST.json INPUT.csv PLAN.csv")
+  data <- utils::read.csv(args[3L], stringsAsFactors = FALSE, check.names = FALSE)
+  manifest <- read_manifest(normalizePath(args[2L], mustWork = TRUE), data, root)
+  utils::write.csv(execution_plan(manifest, data), args[4L], row.names = FALSE, na = "")
+  cat("Wrote", manifest$expected_rows, "planned specifications to", args[4L], "\n")
   quit(status = 0L)
 }
 
 if (command == "freeze") {
   if (length(args) != 4L) stop("Usage: Rscript paper/run.R freeze MENU.json INPUT.csv MANIFEST.json")
-  menu <- jsonlite::read_json(args[2L], simplifyVector = TRUE)
+  menu <- read_menu(args[2L])
   abort_if(menu$analysis_kind != "application", "Use the demo command for generated data.")
   data <- utils::read.csv(args[3L], stringsAsFactors = FALSE, check.names = FALSE)
   freeze_manifest(menu, data, root, args[4L])
   cat("Frozen manifest:", normalizePath(args[4L]), "\n")
   quit(status = 0L)
 } else if (command == "demo") {
-  menu <- jsonlite::read_json(file.path(root, "paper/config/demo.json"), simplifyVector = TRUE)
+  menu <- read_menu(file.path(root, "paper/config/demo.json"))
   data <- make_demo_data(menu$seed)
   output_root <- Sys.getenv("SPEC_CURVES_OUTPUT_DIR", file.path(root, "local/output"))
   directory <- file.path(output_root, "synthetic-demo",
                          paste0(format(Sys.time(), "%Y%m%dT%H%M%SZ", tz = "UTC"), "-", Sys.getpid()))
   dir.create(directory, recursive = TRUE, showWarnings = FALSE)
+  # Estimate from the written CSV so other implementations can use identical bytes.
+  input <- file.path(directory, "generated_input.csv")
+  utils::write.csv(data, input, row.names = FALSE)
+  data <- utils::read.csv(input, stringsAsFactors = FALSE, check.names = FALSE)
   path <- file.path(directory, "spec_curve_manifest.json")
   manifest <- freeze_manifest(menu, data, root, path)
 } else if (command == "estimate") {
@@ -57,7 +81,7 @@ if (command == "freeze") {
   manifest <- read_manifest(path, data, root)
   abort_if(manifest$menu$analysis_kind != "application", "Use the demo command for generated data.")
 } else {
-  stop("Unknown command. Choose check, restore, demo, freeze, or estimate.")
+  stop("Unknown command. Choose check, restore, demo, validate, freeze, plan, or estimate.")
 }
 
 abort_if(file.exists(file.path(directory, "results.csv")), "Output already exists; use a fresh run directory.")
@@ -78,6 +102,7 @@ run_record <- list(analysis_kind = manifest$menu$analysis_kind, started_utc = st
                    finished_utc = format(Sys.time(), "%Y-%m-%dT%H:%M:%SZ", tz = "UTC"),
                    manifest_hash = manifest$manifest_hash, input_hash = manifest$input_hash,
                    source_hashes = manifest$source_hashes, R_version = R.version.string,
+                   input_file_sha256 = if (exists("input")) file_sha256(input) else file_sha256(args[3L]),
                    package_versions = as.list(stats::setNames(vapply(packages, function(p) as.character(utils::packageVersion(p)), ""), packages)))
 jsonlite::write_json(run_record, file.path(directory, "run_record.json"), pretty = TRUE, auto_unbox = TRUE)
 writeLines(capture.output(utils::sessionInfo()), file.path(directory, "sessionInfo.txt"))

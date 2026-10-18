@@ -1,26 +1,38 @@
 {
-  "version": "demo-v1",
+  "schema_version": 2,
+  "version": "demo-v2",
   "analysis_kind": "synthetic_demo",
   "estimator": "linear_fixed_effects",
   "title": "Synthetic workflow demonstration",
   "estimand": "Within-firm linear association between x and y in generated panel data",
-  "outcome": "y",
-  "treatment": "x",
+  "estimate_label": "Coefficient on x",
   "row_id": "row_id",
   "unit": "firm",
   "time": "year",
-  "required_controls": ["required_control"],
-  "fixed_effects": ["firm", "year"],
-  "cluster": "firm",
-  "confidence_level": 0.95,
-  "control_blocks": {
-    "required": [],
-    "plus_size": ["size"],
-    "plus_size_liquidity": ["size", "liquidity"]
+  "base": {
+    "outcome": "y",
+    "treatment": "x",
+    "required_controls": ["required_control"],
+    "fixed_effects": ["firm", "year"],
+    "vcov": {"type": "cluster", "cluster": "firm"},
+    "filters": []
   },
+  "confidence_level": 0.95,
+  "dimensions": [
+    {
+      "name": "controls",
+      "label": "Optional controls",
+      "options": [
+        {"id": "required", "label": "Required only"},
+        {"id": "plus_size", "label": "+ size", "add_controls": ["size"]},
+        {"id": "plus_size_liquidity", "label": "+ size, liquidity", "add_controls": ["size", "liquidity"]}
+      ]
+    }
+  ],
   "sample_modes": ["available", "common"],
-  "preferred": {"control_block": "required", "sample_mode": "available"},
+  "preferred": {"controls": "required", "sample_mode": "available"},
   "reference": null,
   "joint_inference": "not_implemented",
+  "figure": {"width": 7, "height": 4.5},
   "seed": 20261018
 }

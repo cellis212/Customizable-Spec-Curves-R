@@ -11,14 +11,23 @@ from publication_policy import LEGACY_IMAGES, allowed_path, inspect_blob
 class PublicationPolicyTests(unittest.TestCase):
     def test_source_paths(self):
         for path in ["paper/run.R", "paper/R/curve.R", "paper/tests/test_curve.R", "renv.lock",
-                     "paper/manuscript/paper.qmd", "paper/manuscript/references.bib"]:
+                     "paper/applications/bll2010/menu.json",
+                     "paper/applications/cz_am/build_input.R", "docs/ai-guide.md", "docs/prompts/01-design-menu.md",
+                     "python/speccurve/engine.py", "python/tests/test_engine.py", "stata/speccurve_run.do",
+                     "paper/figures/make_figures.R", "tools/compare_implementations.py"]:
             self.assertTrue(allowed_path(path), path)
 
     def test_data_and_internal_records_fail_closed(self):
         for path in ["data/input.csv", "paper/R/data.csv", "paper/R/notes/secret.R",
                      "paper/notes.R", "paper/config/notes.json", "report/paper.qmd",
                      ".paper-agent/STATE.json", "AGENTS.md", "new-output.png",
-                     "paper/manuscript/output/paper.pdf", "paper/manuscript/sections/notes.qmd"]:
+                     "paper/manuscript/output/paper.pdf", "paper/manuscript/sections/notes.qmd",
+                     "paper/applications/bll2010/bll_input.csv", "paper/applications/cz_am/results.csv",
+                     "paper/figures/Figure_1.pdf", "python/speccurve/results.py", "docs/prompts/notes.md",
+                     "paper/manuscript/generated/table_menu_bll.tex", "python/.venv/bin/python",
+                     "paper/manuscript/paper.qmd", "paper/manuscript/references.bib",
+                     "paper/manuscript/sections/05_applications.qmd", "manuscript/paper.qmd",
+                     "paper/scripts/word_count.py", "docs/supplement.md", "paper/highlights.md"]:
             self.assertFalse(allowed_path(path), path)
 
     def test_forced_staging_cannot_allow_data(self):
