@@ -1,0 +1,4 @@
+# The lockfile covers the paper workflow. Original examples retain their own
+# documented package requirements and are not part of the new smoke test.
+/spec_curve_run_models_sample.R
+/spec_curve_print_curve_sample.R

@@ -1,0 +1,7 @@
+{
+  "schema_version": 1,
+  "applications": [
+    {"id": "application_1", "status": "not_selected", "manifest": null},
+    {"id": "application_2", "status": "not_selected", "manifest": null}
+  ]
+}

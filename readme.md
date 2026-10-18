@@ -1,5 +1,45 @@
 # Specification Curve Analysis in R
 
+## Paper workflow
+
+This repository also contains the source for *Specification Curves in Empirical Finance: A Practical Guide*. The `paper/` directory provides a manuscript scaffold and a small, runnable reference workflow alongside the original customizable scripts below.
+
+The new workflow currently supports linear fixed-effects models with one-way cluster-robust, pointwise confidence intervals. It compares available and common samples, preserves required controls, records failed specifications, and validates each result against a manifest frozen before estimation. It does not implement joint specification-curve inference. The two empirical application slots are unselected; the runnable demonstration uses generated data and establishes no empirical finding.
+
+From the repository root:
+
+```sh
+make setup        # Install local commit/push checks and check R dependencies
+make restore      # Restore the R package versions recorded in renv.lock
+make check        # Check publication rules and scientific workflow invariants
+make demo         # Run the complete generated-data example
+make manuscript   # Compile the manuscript scaffold with Quarto and TeX
+```
+
+R 4.5.1 and the dependency versions in `renv.lock` were used for setup. The lockfile covers the new paper workflow; the original examples retain their separate package requirements below. The manuscript build also requires Quarto and a TeX installation. Run `make restore` if required R packages are missing. Generated demonstration files go under the ignored `local/output/` directory, or the directory specified by `SPEC_CURVES_OUTPUT_DIR`. The manuscript PDF goes under the ignored `paper/manuscript/output/` directory.
+
+The source layout is:
+
+- `paper/run.R`: dependency checks, manifest freezing, estimation, validation, and rendering.
+- `paper/R/`: model, sample, provenance, and plotting functions.
+- `paper/config/demo.json`: the generated-data specification menu.
+- `paper/config/applications.json`: the two unselected application slots.
+- `paper/tests/`: checks for missing/duplicated rows, changed inputs/manifests, common samples, unidentified coefficients, and baseline reproduction.
+- `paper/manuscript/`: Quarto source, section files, and verified seed references.
+
+For an empirical application, construct a justified application-specific menu using the demo schema, set `analysis_kind` to `application`, and supply `reference` with the published `estimate`, an absolute numerical `tolerance`, and a precise `source`. Required controls, fixed effects, and clustering remain fixed. The supported menu varies control blocks and available/common samples only. A new design or estimator needs a separately checked implementation. The preferred specification must reproduce its documented baseline before figures can be assembled.
+
+```sh
+Rscript paper/run.R freeze /path/to/menu.json /path/to/input.csv /path/to/manifest.json
+Rscript paper/run.R estimate /path/to/manifest.json /path/to/input.csv /path/to/new-run
+```
+
+Freezing saves the complete grid, input hash, and analysis-source hashes. Keep the manifest and its `.sha256` sidecar together. A changed menu, input, or analysis source requires a new manifest version. CSV input is converted to an R data frame before hashing; keep variable types and input conventions stable between freezing and estimation. Failed or unidentified specifications remain in the results, block assembly, and must be addressed explicitly. Summary fractions are descriptive properties of the chosen set; pointwise intervals do not provide joint inference.
+
+New commits use an explicit source allowlist, checked by local commit/push hooks and continuous integration. Data, generated figures/tables/PDFs, run records, transcripts, and project planning files are excluded. The three original public images below are retained unchanged. The checks are guardrails; review the staged diff before publishing source.
+
+## Original customizable examples
+
 This repository contains modifiable (not canned) code based on the R package `specr` to create extremely flexible and visually appealing specification curves in R. The files are also structured to create multiple spec curves across different dependent variables in an efficient manner and to allow sampling of specifications when there are many potential options. The code is designed to be intuitive and extremely customizable, allowing you to adapt it to any of your specific project needs. The repository includes two main files:
 
 1. **Model Running File**: This file runs all the models. It requires significant customization based on your project, but it is structured in a way that makes it easy to adjust. AI coding models, such as Cursor, can assist in tailoring this file to your specific requirements. I find uploading your primary analysis file and then a list of the specifications you want to try gets you 90% of the way there. The included sample file lists options from Ellis, Takefumi, and Veith (2024).

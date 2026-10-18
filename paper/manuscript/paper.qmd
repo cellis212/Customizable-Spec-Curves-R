@@ -1,0 +1,23 @@
+---
+title: "Specification Curves in Empirical Finance: A Practical Guide"
+subtitle: "Working manuscript scaffold"
+author: "Cameron M. Ellis"
+date: last-modified
+lang: en
+format: pdf
+---
+
+{{< include sections/01_introduction.qmd >}}
+
+{{< include sections/02_constructing_reading.qmd >}}
+
+{{< include sections/03_best_practices.qmd >}}
+
+{{< include sections/04_applications.qmd >}}
+
+{{< include sections/05_conclusion.qmd >}}
+
+# References {.unnumbered}
+
+::: {#refs}
+:::
