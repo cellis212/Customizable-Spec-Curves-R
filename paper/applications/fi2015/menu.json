@@ -1,0 +1,277 @@
+{
+  "schema_version": 2,
+  "version": "fi-v1",
+  "analysis_kind": "application",
+  "estimator": "linear_fixed_effects",
+  "title": "Interstate branching deregulation and mortgage credit: Favara and Imbs (2015)",
+  "estimand": "Effect of lifting one interstate branching restriction (Rice-Strahan index, 0-4) on the annual log growth of the number of mortgages originated in a county; one panel for banks (subject to the rules) and one for placebo lenders.",
+  "estimate_label": "Effect on log growth of mortgage originations",
+  "row_id": "row_id",
+  "unit": "county",
+  "time": "year",
+  "base": {
+    "outcome": "loans_growth",
+    "treatment": "dereg_index_lag",
+    "fixed_effects": [
+      "county",
+      "year"
+    ],
+    "vcov": {
+      "type": "cluster",
+      "cluster": "state"
+    }
+  },
+  "confidence_level": 0.95,
+  "panel_by": "lender",
+  "sample_modes": [
+    "available"
+  ],
+  "dimensions": [
+    {
+      "name": "lender",
+      "label": "Lenders",
+      "options": [
+        {
+          "id": "banks",
+          "label": "Commercial banks",
+          "filters": [
+            {
+              "variable": "lender",
+              "op": "==",
+              "value": 1
+            }
+          ],
+          "justification": "FI Table 2 Panel A (baseline): banks are subject to branching rules."
+        },
+        {
+          "id": "placebo",
+          "label": "Placebo lenders",
+          "filters": [
+            {
+              "variable": "lender",
+              "op": "==",
+              "value": 2
+            }
+          ],
+          "justification": "FI Table 2 Panel B: thrifts, credit unions and independent mortgage companies are not subject to the rules."
+        }
+      ]
+    },
+    {
+      "name": "treatment_coding",
+      "label": "Treatment coding",
+      "options": [
+        {
+          "id": "lag_index",
+          "label": "Lagged index (FI)",
+          "justification": "FI baseline."
+        },
+        {
+          "id": "index",
+          "label": "Contemporaneous index",
+          "treatment": "dereg_index",
+          "justification": "de Chaisemartin and D'Haultfoeuille (2024) re-estimate FI with the contemporaneous index."
+        },
+        {
+          "id": "lag_any",
+          "label": "Lagged any-deregulation dummy",
+          "treatment": "dereg_any_lag",
+          "justification": "A binary coding avoids adding up qualitatively different restrictions."
+        }
+      ]
+    },
+    {
+      "name": "controls",
+      "label": "Controls",
+      "options": [
+        {
+          "id": "fi",
+          "label": "Demand controls and lagged outcome (FI)",
+          "add_controls": [
+            "Dl_inc",
+            "LDl_inc",
+            "Dl_pop",
+            "LDl_pop",
+            "Dl_hpi",
+            "LDl_hpi",
+            "Dl_her_v",
+            "LDl_her_v",
+            "loans_growth_lag"
+          ],
+          "justification": "FI baseline."
+        },
+        {
+          "id": "demand",
+          "label": "Demand controls only",
+          "add_controls": [
+            "Dl_inc",
+            "LDl_inc",
+            "Dl_pop",
+            "LDl_pop",
+            "Dl_hpi",
+            "LDl_hpi",
+            "Dl_her_v",
+            "LDl_her_v"
+          ],
+          "justification": "A lagged outcome with county effects risks Nickell bias (FI addendum)."
+        },
+        {
+          "id": "none",
+          "label": "No controls",
+          "justification": "de Chaisemartin and D'Haultfoeuille (2024) re-estimate without controls; controls measured after deregulation may be outcomes."
+        }
+      ]
+    },
+    {
+      "name": "cohorts",
+      "label": "Adoption cohorts",
+      "options": [
+        {
+          "id": "all",
+          "label": "All states",
+          "justification": "FI baseline."
+        },
+        {
+          "id": "drop_1995_1996",
+          "label": "Without 1995-1996 adopters",
+          "filters": [
+            {
+              "variable": "cohort_group",
+              "op": "!=",
+              "value": "1995-1996"
+            }
+          ],
+          "justification": "Leave a cohort out (13 states): checks whether early adopters drive the estimate."
+        },
+        {
+          "id": "drop_1997",
+          "label": "Without 1997 adopters",
+          "filters": [
+            {
+              "variable": "cohort_group",
+              "op": "!=",
+              "value": "1997"
+            }
+          ],
+          "justification": "Leave a cohort out (9 states)."
+        },
+        {
+          "id": "drop_1998",
+          "label": "Without 1998 adopters",
+          "filters": [
+            {
+              "variable": "cohort_group",
+              "op": "!=",
+              "value": "1998"
+            }
+          ],
+          "justification": "Leave a cohort out (16 states)."
+        },
+        {
+          "id": "drop_2000_2001",
+          "label": "Without 2000-2001 adopters",
+          "filters": [
+            {
+              "variable": "cohort_group",
+              "op": "!=",
+              "value": "2000-2001"
+            }
+          ],
+          "justification": "Leave a cohort out (4 states): late adopters serve as comparisons for most of the panel."
+        },
+        {
+          "id": "drop_never",
+          "label": "Without never-deregulated states",
+          "filters": [
+            {
+              "variable": "cohort_group",
+              "op": "!=",
+              "value": "never"
+            }
+          ],
+          "justification": "Identify only from timing among adopters: the 8 states that never deregulated by 2005 may differ (Goodman-Bacon 2021)."
+        }
+      ]
+    },
+    {
+      "name": "counties",
+      "label": "Counties",
+      "options": [
+        {
+          "id": "all",
+          "label": "All counties",
+          "justification": "FI Table 2."
+        },
+        {
+          "id": "border",
+          "label": "Border counties",
+          "filters": [
+            {
+              "variable": "border",
+              "op": "==",
+              "value": 1
+            }
+          ],
+          "justification": "FI Table A1: counties on state borders face similar local conditions."
+        }
+      ]
+    },
+    {
+      "name": "time_effects",
+      "label": "Time effects",
+      "options": [
+        {
+          "id": "year",
+          "label": "Year",
+          "justification": "FI baseline."
+        },
+        {
+          "id": "region_year",
+          "label": "Census region by year",
+          "fixed_effects": [
+            "county",
+            "region_year"
+          ],
+          "justification": "Regional housing and credit cycles in the late 1990s and 2000s."
+        }
+      ]
+    }
+  ],
+  "preferred": {
+    "lender": "banks",
+    "treatment_coding": "lag_index",
+    "controls": "fi",
+    "cohorts": "all",
+    "counties": "all",
+    "time_effects": "year",
+    "sample_mode": "available"
+  },
+  "original_specifications": [
+    {
+      "lender": "placebo",
+      "treatment_coding": "lag_index",
+      "controls": "fi",
+      "cohorts": "all",
+      "counties": "all",
+      "time_effects": "year",
+      "sample_mode": "available"
+    },
+    {
+      "lender": "banks",
+      "treatment_coding": "lag_index",
+      "controls": "fi",
+      "cohorts": "all",
+      "counties": "border",
+      "time_effects": "year",
+      "sample_mode": "available"
+    }
+  ],
+  "reference": {
+    "estimate": 0.028,
+    "std_error": 0.01,
+    "tolerance": 0.0005,
+    "source": "Favara and Imbs (2015), American Economic Review 105(3), Table 2, Panel A, column 1 (N = 10,992; 1,018 counties; 50 states)"
+  },
+  "joint_inference": "not_implemented",
+  "notes": "Cohorts are defined by each state's first year with any interstate branching deregulation (contemporaneous index). Clustered by state (50 clusters, fewer when a cohort is left out)."
+}

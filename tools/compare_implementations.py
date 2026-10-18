@@ -4,8 +4,9 @@ Usage: python3 tools/compare_implementations.py REFERENCE.csv CANDIDATE.csv [--r
 
 Checks identical specification IDs, sample modes, preferred/original flags, panel
 labels, model formulas, outcomes, uncertainty labels, filters, status, samples
-(observation hashes and counts), and numerically close estimates, standard errors, and intervals (p-values to at
-least 1e-6 relative, because libraries compute t tails differently).
+(observation hashes and counts), and numerically close estimates, standard errors, intervals, and IV first-stage F (p-values to at
+least 1e-6 relative, because libraries compute t tails differently; estimates and interval bounds
+relative to the larger of their value and their standard error).
 Uses only the standard library so it runs wherever the implementations do.
 """
 
@@ -16,9 +17,10 @@ import math
 import os
 import sys
 
-KEYS = ("spec_id", "sample_mode", "preferred", "original", "panel", "formula", "outcome", "vcov", "filters", "status")
+KEYS = ("spec_id", "sample_mode", "preferred", "original", "panel", "formula", "outcome", "vcov", "filters", "status",
+        "instruments", "weights")
 COUNTS = ("n_eligible", "n_obs", "n_units", "n_periods", "n_clusters")
-NUMBERS = ("estimate", "std_error", "statistic", "p_value", "ci_lower", "ci_upper")
+NUMBERS = ("estimate", "std_error", "statistic", "p_value", "ci_lower", "ci_upper", "first_stage_f")
 BOOLS = {"TRUE": "true", "True": "true", "FALSE": "false", "False": "false"}
 
 
@@ -67,11 +69,20 @@ def compare(reference, candidate, rtol, atol):
             x, y = number(a[column]), number(b[column])
             if not (math.isnan(x) and math.isnan(y)) and x != y:
                 problems.append(f"{spec_id} {column}: {x} vs {y}")
+        se = abs(number(a["std_error"]))
         for column in NUMBERS:
+            if column not in a or column not in b:
+                continue
             x, y = number(a[column]), number(b[column])
+            if math.isnan(x) and math.isnan(y):
+                continue
             # Libraries evaluate t-distribution tails with different routines.
             tolerance = max(rtol, 1e-6) if column == "p_value" else rtol
-            if not math.isclose(x, y, rel_tol=tolerance, abs_tol=atol):
+            # Estimates and interval bounds near zero are judged on the scale of
+            # their own standard error, not only relative to their (tiny) value.
+            floor = se if column in ("estimate", "ci_lower", "ci_upper") and not math.isnan(se) else 1.0 if column == "statistic" else 0.0
+            scale = max(abs(x), abs(y), floor)
+            if not (abs(x - y) <= tolerance * scale or abs(x - y) <= atol):
                 problems.append(f"{spec_id} {column}: {x!r} vs {y!r}")
     return problems, choice_columns
 

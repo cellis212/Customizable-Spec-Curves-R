@@ -103,5 +103,41 @@ numbers$btmr <- c(describe(btmr), list(
          excludes_zero = r$ci_lower > 0 | r$ci_upper < 0)),
   by = lapply(stats::setNames(nm = c("macro", "city_size", "time_effects", "sample", "outcome_def")),
               function(d) by_option(btmr, d))))
+# Supplementary design examples (numbers quoted in the Supplementary Material).
+fi <- read_results("fi2015")
+cfr <- read_results("cfr2010")
+bp <- read_results("bp2005")
+rank_from_top <- function(x) sum(x$estimate > x$estimate[x$preferred]) + 1L
+at_published <- function(x, published, vary) {
+  keep <- rep(TRUE, nrow(x))
+  for (d in setdiff(names(published), c(vary, "panel"))) keep <- keep & x[[d]] == published[[d]]
+  x[keep, ]
+}
+banks <- fi[fi$lender == "banks", ]
+placebo <- fi[fi$lender == "placebo", ]
+fi_pub <- banks[banks$preferred, c("treatment_coding", "controls", "cohorts", "counties", "time_effects")]
+numbers$fi <- list(banks = c(describe(banks), list(n_positive = sum(banks$estimate > 0), rank_from_top = rank_from_top(banks),
+    by_coding_excl_zero = tapply(excludes_zero(banks), banks$treatment_coding, sum),
+    by_time_effects_excl_zero = tapply(excludes_zero(banks), banks$time_effects, sum),
+    cohort_left_out = lapply(split(at_published(banks, fi_pub, "cohorts"), at_published(banks, fi_pub, "cohorts")$cohorts),
+                             function(r) list(estimate = r$estimate, se = r$std_error, excludes_zero = excludes_zero(r), clusters = r$n_clusters)))),
+  placebo = c(describe(placebo), list(excl_zero_by_counties = tapply(excludes_zero(placebo), placebo$counties, sum))))
+capital <- cfr[cfr$spending == "capital", ]
+numbers$cfr <- list(capital = c(describe(capital), list(rank_from_top = rank_from_top(capital),
+    median_by_bandwidth = tapply(capital$estimate, capital$bandwidth, stats::median),
+    median_se_by_bandwidth = tapply(capital$std_error, capital$bandwidth, stats::median))),
+  total = describe(cfr[cfr$spending == "total", ]), instruction = describe(cfr[cfr$spending == "instruction", ]))
+branches <- bp[bp$bank_measure == "branches", ]
+bp_pub <- branches[branches$preferred, c("instrument_set", "controls", "years", "states")]
+numbers$bp <- list(branches = c(describe(branches), list(rank_from_most_negative = sum(branches$estimate < branches$estimate[branches$preferred]) + 1L,
+    median_first_stage_f = stats::median(branches$first_stage_f), n_weak = sum(branches$first_stage_f < 10),
+    weak_by_instrument_set = tapply(branches$first_stage_f < 10, branches$instrument_set, sum),
+    weak_excl_zero = sum(excludes_zero(branches) & branches$first_stage_f < 10),
+    survey_years_excl_zero = sum(excludes_zero(branches[branches$years == "survey", ])),
+    all_years_excl_zero = sum(excludes_zero(branches[branches$years == "all", ])),
+    state_left_out = lapply(split(at_published(branches, bp_pub, "states"), at_published(branches, bp_pub, "states")$states),
+                            function(r) list(estimate = r$estimate, first_stage_f = r$first_stage_f)))),
+  credit_weak = sum(bp$first_stage_f[bp$bank_measure == "credit"] < 10),
+  savings_weak = sum(bp$first_stage_f[bp$bank_measure == "savings"] < 10))
 jsonlite::write_json(numbers, args[2L], pretty = TRUE, auto_unbox = TRUE, digits = 6)
 cat("Wrote", args[2L], "\n")

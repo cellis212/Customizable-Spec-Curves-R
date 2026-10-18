@@ -182,6 +182,62 @@ pooled_results <- run_manifest(pooled_manifest, series)
 check(all(pooled_results$status == "failed") && all(grepl("exactly one series", pooled_results$error)),
       "Time-series means must refuse pooled series.")
 
+# Instrumental variables with fixed effects and the effective first-stage F.
+set.seed(7)
+ivd <- data.frame(row_id = seq_len(600L), firm = rep(seq_len(60L), each = 10L), year = rep(2001:2010, 60L))
+ivd$z1 <- stats::rnorm(600L)
+ivd$z2 <- stats::rnorm(600L)
+ivd$w <- stats::runif(600L, 0.5, 2)
+ivd$c1 <- stats::rnorm(600L)
+u <- stats::rnorm(600L)
+ivd$x <- 0.8 * ivd$z1 + 0.3 * ivd$z2 + 0.5 * u + stats::rnorm(600L) + ivd$firm / 60
+ivd$y <- 1.5 * ivd$x + 0.4 * ivd$c1 + u + ivd$year / 10
+iv_menu <- list(schema_version = 2L, version = "iv-test", analysis_kind = "synthetic_demo",
+  estimator = "iv_fixed_effects", title = "IV test", estimand = "Effect of x on y",
+  row_id = "row_id", unit = "firm", time = "year",
+  base = list(outcome = "y", treatment = "x", instruments = list("z1", "z2"), required_controls = list("c1"),
+              fixed_effects = list("firm", "year"), vcov = list(type = "cluster", cluster = "firm")),
+  confidence_level = 0.95,
+  dimensions = list(
+    list(name = "instrument_set", label = "Instruments", options = list(
+      list(id = "both", label = "Both"),
+      list(id = "z1", label = "z1 only", instruments = list("z1"), add_controls = list("z2")))),
+    list(name = "weighting", label = "Weights", options = list(
+      list(id = "none", label = "Unweighted"),
+      list(id = "w", label = "Weighted", weights = "w")))),
+  sample_modes = list("available"), preferred = list(instrument_set = "both", weighting = "none", sample_mode = "available"))
+iv_manifest <- freeze_manifest(iv_menu, ivd, root, file.path(directory, "iv.json"))
+iv_results <- run_manifest(iv_manifest, ivd)
+check(validate_results(iv_manifest, iv_results)$passed, "IV grid should complete.")
+iv_direct <- fixest::feols(y ~ c1 | firm + year | x ~ z1 + z2, data = ivd, vcov = ~firm, ssc = fixest_ssc(), fixef.tol = 1e-10, notes = FALSE)
+iv_pref <- iv_results[iv_results$preferred, ]
+check(abs(iv_pref$estimate - unname(stats::coef(iv_direct)["fit_x"])) < 1e-12 &&
+        abs(iv_pref$std_error - unname(fixest::se(iv_direct)["fit_x"])) < 1e-12,
+      "IV estimate and standard error must match a direct fixest call.")
+one <- iv_results[iv_results$instrument_set == "z1" & iv_results$weighting == "none", ]
+first <- fixest::feols(x ~ z1 + z2 + c1 | firm + year, data = ivd, vcov = ~firm, ssc = fixest_ssc(), fixef.tol = 1e-10, notes = FALSE)
+check(abs(one$first_stage_f - unname(fixest::tstat(first)["z1"])^2) < 1e-8,
+      "With one instrument the effective F must equal the squared robust first-stage t statistic.")
+check(all(iv_results$first_stage_f > 10), "Strong synthetic instruments must report large effective F.")
+weighted <- iv_results[iv_results$instrument_set == "both" & iv_results$weighting == "w", ]
+w_direct <- fixest::feols(y ~ c1 | firm + year | x ~ z1 + z2, data = ivd, weights = ~w, vcov = ~firm,
+                          ssc = fixest_ssc(), fixef.tol = 1e-10, notes = FALSE)
+check(abs(weighted$estimate - unname(stats::coef(w_direct)["fit_x"])) < 1e-12 && weighted$weights == "w",
+      "Weighted IV must match a direct weighted fixest call and record its weights.")
+check(all(grepl("| x ~ z1", iv_results$formula, fixed = TRUE)), "IV formulas must name the endogenous variable and instruments.")
+bad_iv <- iv_menu
+bad_iv$base$instruments <- list()
+expect_error(validate_menu(bad_iv, ivd), "at least one instrument")
+bad_iv <- iv_menu
+bad_iv$base$instruments <- list("z1", "c1")
+expect_error(validate_menu(bad_iv, ivd), "distinct from")
+ols_with_z <- iv_menu
+ols_with_z$estimator <- "linear_fixed_effects"
+expect_error(validate_menu(ols_with_z, ivd), "only used by iv_fixed_effects")
+negative <- ivd
+negative$w[3L] <- -1
+expect_error(validate_menu(iv_menu, negative), "positive")
+
 # Language-neutral execution plan for Stata.
 plan <- execution_plan(ts_manifest, series)
 check(nrow(plan) == ts_manifest$expected_rows && identical(plan$spec_id, ts_manifest$grid$spec_id),

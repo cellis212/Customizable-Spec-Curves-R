@@ -18,6 +18,8 @@
 *     sorted by time (positional lags), and t(n-1) critical values.
 * Supported: linear_fixed_effects (cluster, hetero, iid) and time_series_mean
 * (iid, newey_west). Every failure is recorded with a reason; no row is skipped.
+* Not implemented: iv_fixed_effects and regression weights; such rows fail with
+* that reason rather than running a different model.
 * Status: written to match the R reference but not yet run against it. Unit
 * trends are absorbed as unit##c.time; reghdfe's degrees-of-freedom count for
 * these slopes may differ slightly from fixest's, so compare trend rows first.
@@ -40,10 +42,14 @@ import delimited using "`plan'", clear varnames(1) stringcols(_all) bindquote(st
 local n = _N
 local fields spec_id sample_mode panel estimator outcome treatment controls fixed_effects unit_trend ///
     unit time row_id vcov_type cluster lags confidence_level filters stata_if sample_vars formula vcov
+capture confirm variable weights
+local has_weights = !_rc
 forvalues i = 1/`n' {
     foreach f of local fields {
         local `f'`i' = `f'[`i']
     }
+    local weights`i' ""
+    if `has_weights' local weights`i' = weights[`i']
 }
 
 * ---- Execute each row ------------------------------------------------------
@@ -93,6 +99,9 @@ forvalues i = 1/`n' {
     local alpha = 1 - real("`confidence_level`i''")
     if `n_eligible' == 0 {
         local error "No complete observations."
+    }
+    else if "`weights`i''" != "" {
+        local error "Regression weights are not implemented in the Stata executor."
     }
     else if "`estimator`i''" == "linear_fixed_effects" {
         local absorb "`fixed_effects`i''"

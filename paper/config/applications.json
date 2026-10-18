@@ -36,6 +36,36 @@
       "status": "selected_reproduced_frozen",
       "specifications": 240,
       "source": "Bednarek, te Kaat, Ma and Rebucci (2021), Review of Financial Studies 34(10); data doi:10.7910/DVN/LQPRIA"
+    },
+    {
+      "id": "fi2015",
+      "manifest_version": "fi-v1",
+      "raw": "fi_2015/20121416_data.zip",
+      "input": "fi2015/fi2015_input.csv",
+      "status": "selected_reproduced_frozen",
+      "specifications": 432,
+      "design": "staggered difference-in-differences",
+      "source": "Favara and Imbs (2015), American Economic Review 105(3); AEA package (openICPSR doi:10.3886/E112894V1)"
+    },
+    {
+      "id": "cfr2010",
+      "manifest_version": "cfr-v1",
+      "raw": "cfr_2010/recursivepanel.dta.zip",
+      "input": "cfr2010/cfr2010_input.csv",
+      "status": "selected_reproduced_frozen",
+      "specifications": 336,
+      "design": "regression discontinuity",
+      "source": "Cellini, Ferreira and Rothstein (2010), Quarterly Journal of Economics 125(1); authors' replication archive"
+    },
+    {
+      "id": "bp2005",
+      "manifest_version": "bp-v1",
+      "raw": "bp_2005/june05_data_burgess.zip",
+      "input": "bp2005/bp2005_input.csv",
+      "status": "selected_reproduced_frozen",
+      "specifications": 1224,
+      "design": "instrumental variables",
+      "source": "Burgess and Pande (2005), American Economic Review 95(3); AEA package (openICPSR doi:10.3886/E112313V1)"
     }
   ]
 }

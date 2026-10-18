@@ -1,0 +1,335 @@
+{
+  "schema_version": 2,
+  "version": "cfr-v1",
+  "analysis_kind": "application",
+  "estimator": "linear_fixed_effects",
+  "title": "School bond passage and district spending: Cellini, Ferreira and Rothstein (2010)",
+  "estimand": "Intent-to-treat effect of narrowly passing a school-district general-obligation bond measure on spending per pupil three years later (2000s dollars per pupil); each panel is a different outcome.",
+  "estimate_label": "Effect of passage on spending per pupil, year 3 ($)",
+  "row_id": "row_id",
+  "unit": "district",
+  "time": "year",
+  "base": {
+    "outcome": "capital_outlays_pp",
+    "treatment": "win_3",
+    "required_controls": [
+      "win_1",
+      "win_2",
+      "win_4",
+      "win_5",
+      "win_6"
+    ],
+    "fixed_effects": [
+      "refid",
+      "year",
+      "dyear"
+    ],
+    "vcov": {
+      "type": "cluster",
+      "cluster": "district"
+    }
+  },
+  "confidence_level": 0.95,
+  "panel_by": "spending",
+  "sample_modes": [
+    "available"
+  ],
+  "dimensions": [
+    {
+      "name": "spending",
+      "label": "Outcome",
+      "options": [
+        {
+          "id": "capital",
+          "label": "Capital outlays per pupil",
+          "outcome": "capital_outlays_pp",
+          "justification": "CFR Table IV Panel A (baseline): bond revenue funds capital projects."
+        },
+        {
+          "id": "total",
+          "label": "Total expenditure per pupil",
+          "outcome": "total_expenditure_pp",
+          "justification": "CFR Table IV Panel A."
+        },
+        {
+          "id": "instruction",
+          "label": "Instructional spending per pupil (placebo)",
+          "outcome": "instructional_pp",
+          "justification": "CFR Table IV Panel A; bond revenue cannot legally fund instruction, so a jump would signal a problem with the design."
+        }
+      ]
+    },
+    {
+      "name": "polynomial",
+      "label": "Polynomial in vote share",
+      "options": [
+        {
+          "id": "cubic",
+          "label": "Cubic (CFR)",
+          "add_controls": [
+            "req_1",
+            "req_2",
+            "req_3",
+            "req_4",
+            "req_5",
+            "req_6",
+            "percent_1",
+            "percent_2",
+            "percent_3",
+            "percent_4",
+            "percent_5",
+            "percent_6",
+            "percent2_1",
+            "percent2_2",
+            "percent2_3",
+            "percent2_4",
+            "percent2_5",
+            "percent2_6",
+            "percent3_1",
+            "percent3_2",
+            "percent3_3",
+            "percent3_4",
+            "percent3_5",
+            "percent3_6"
+          ],
+          "justification": "CFR baseline: cubic in vote share for each relative year, with threshold-regime terms."
+        },
+        {
+          "id": "quadratic",
+          "label": "Quadratic",
+          "add_controls": [
+            "req_1",
+            "req_2",
+            "req_3",
+            "req_4",
+            "req_5",
+            "req_6",
+            "percent_1",
+            "percent_2",
+            "percent_3",
+            "percent_4",
+            "percent_5",
+            "percent_6",
+            "percent2_1",
+            "percent2_2",
+            "percent2_3",
+            "percent2_4",
+            "percent2_5",
+            "percent2_6"
+          ],
+          "justification": "CFR Table VI varies the polynomial order; Gelman and Imbens (2019) caution against high-order global polynomials."
+        },
+        {
+          "id": "linear",
+          "label": "Linear",
+          "add_controls": [
+            "req_1",
+            "req_2",
+            "req_3",
+            "req_4",
+            "req_5",
+            "req_6",
+            "percent_1",
+            "percent_2",
+            "percent_3",
+            "percent_4",
+            "percent_5",
+            "percent_6"
+          ],
+          "justification": "Lowest-order global control; natural with narrow windows."
+        },
+        {
+          "id": "linear_sides",
+          "label": "Linear, separate slopes each side",
+          "add_controls": [
+            "req_1",
+            "req_2",
+            "req_3",
+            "req_4",
+            "req_5",
+            "req_6",
+            "margin_1",
+            "margin_2",
+            "margin_3",
+            "margin_4",
+            "margin_5",
+            "margin_6",
+            "win_margin_1",
+            "win_margin_2",
+            "win_margin_3",
+            "win_margin_4",
+            "win_margin_5",
+            "win_margin_6"
+          ],
+          "justification": "Standard local-linear RD: the slope in the vote margin may differ above and below the threshold."
+        }
+      ]
+    },
+    {
+      "name": "bandwidth",
+      "label": "Bandwidth and kernel",
+      "options": [
+        {
+          "id": "global",
+          "label": "All measures (CFR)",
+          "justification": "CFR baseline: global polynomial over all measures, equal weights."
+        },
+        {
+          "id": "h20_uniform",
+          "label": "Within 20 points, uniform",
+          "filters": [
+            {
+              "variable": "abs_margin",
+              "op": "<",
+              "value": 20
+            }
+          ],
+          "justification": "Local estimation: only measures whose vote share is within 20 points of the required share; equal weights within the window."
+        },
+        {
+          "id": "h20_tri",
+          "label": "Within 20 points, triangular",
+          "filters": [
+            {
+              "variable": "abs_margin",
+              "op": "<",
+              "value": 20
+            }
+          ],
+          "justification": "Local estimation: only measures whose vote share is within 20 points of the required share; triangular weights fall linearly to zero at the window edge.",
+          "weights": "tri_20"
+        },
+        {
+          "id": "h10_uniform",
+          "label": "Within 10 points, uniform",
+          "filters": [
+            {
+              "variable": "abs_margin",
+              "op": "<",
+              "value": 10
+            }
+          ],
+          "justification": "Local estimation: only measures whose vote share is within 10 points of the required share; equal weights within the window."
+        },
+        {
+          "id": "h10_tri",
+          "label": "Within 10 points, triangular",
+          "filters": [
+            {
+              "variable": "abs_margin",
+              "op": "<",
+              "value": 10
+            }
+          ],
+          "justification": "Local estimation: only measures whose vote share is within 10 points of the required share; triangular weights fall linearly to zero at the window edge.",
+          "weights": "tri_10"
+        },
+        {
+          "id": "h5_uniform",
+          "label": "Within 5 points, uniform",
+          "filters": [
+            {
+              "variable": "abs_margin",
+              "op": "<",
+              "value": 5
+            }
+          ],
+          "justification": "Local estimation: only measures whose vote share is within 5 points of the required share; equal weights within the window."
+        },
+        {
+          "id": "h5_tri",
+          "label": "Within 5 points, triangular",
+          "filters": [
+            {
+              "variable": "abs_margin",
+              "op": "<",
+              "value": 5
+            }
+          ],
+          "justification": "Local estimation: only measures whose vote share is within 5 points of the required share; triangular weights fall linearly to zero at the window edge.",
+          "weights": "tri_5"
+        }
+      ]
+    },
+    {
+      "name": "donut",
+      "label": "Donut",
+      "options": [
+        {
+          "id": "none",
+          "label": "No donut",
+          "justification": "CFR baseline."
+        },
+        {
+          "id": "donut1",
+          "label": "Drop measures within 1 point",
+          "filters": [
+            {
+              "variable": "abs_margin",
+              "op": ">=",
+              "value": 1
+            }
+          ],
+          "justification": "Guards against sorting, recounts or misrecorded vote shares at the threshold."
+        }
+      ]
+    },
+    {
+      "name": "threshold",
+      "label": "Threshold regime",
+      "options": [
+        {
+          "id": "pooled",
+          "label": "Both thresholds (CFR)",
+          "justification": "CFR pool the two-thirds and 55 percent thresholds."
+        },
+        {
+          "id": "two_thirds",
+          "label": "Two-thirds measures only",
+          "filters": [
+            {
+              "variable": "two_thirds",
+              "op": "==",
+              "value": 1
+            }
+          ],
+          "justification": "One threshold and one voting rule; pooling cutoffs is a design choice (Hsu and Shen 2024)."
+        }
+      ]
+    }
+  ],
+  "preferred": {
+    "spending": "capital",
+    "polynomial": "cubic",
+    "bandwidth": "global",
+    "donut": "none",
+    "threshold": "pooled",
+    "sample_mode": "available"
+  },
+  "original_specifications": [
+    {
+      "spending": "total",
+      "polynomial": "cubic",
+      "bandwidth": "global",
+      "donut": "none",
+      "threshold": "pooled",
+      "sample_mode": "available"
+    },
+    {
+      "spending": "instruction",
+      "polynomial": "cubic",
+      "bandwidth": "global",
+      "donut": "none",
+      "threshold": "pooled",
+      "sample_mode": "available"
+    }
+  ],
+  "reference": {
+    "estimate": 1121,
+    "std_error": 244,
+    "tolerance": 0.5,
+    "source": "Cellini, Ferreira and Rothstein (2010), Quarterly Journal of Economics 125(1), Table IV, Panel A (capital outlays, year 3); authors' log fiscaltab_rf.log reports 1121.41 (243.79), N = 6,970"
+  },
+  "joint_inference": "not_implemented",
+  "notes": "Window, kernel, donut and threshold choices refer to the vote margin of the measure that defines each stack. fixest drops 24 fixed-effect singletons that Stata's areg keeps (N = 6,946 against 6,970); the point estimate is unchanged. Standard errors treat measure effects as nested in district clusters, so they are smaller than areg's (222.6 against 243.8)."
+}

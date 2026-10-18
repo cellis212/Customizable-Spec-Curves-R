@@ -106,5 +106,47 @@ class EngineTests(unittest.TestCase):
         self.assertTrue(results["error"].str.contains("exactly one series").all())
 
 
+class EstimatorExtensionTests(unittest.TestCase):
+    def test_iv_effective_f_and_weights(self):
+        import pyfixest as pf
+
+        rng = np.random.default_rng(7)
+        n = 600
+        data = pd.DataFrame({"row_id": np.arange(1, n + 1), "firm": np.repeat(np.arange(1, 61), 10),
+                             "year": np.tile(np.arange(2001, 2011), 60)})
+        data["z1"], data["z2"], data["c1"] = rng.normal(size=n), rng.normal(size=n), rng.normal(size=n)
+        data["w"] = rng.uniform(0.5, 2, size=n)
+        u = rng.normal(size=n)
+        data["x"] = 0.8 * data["z1"] + 0.3 * data["z2"] + 0.5 * u + rng.normal(size=n) + data["firm"] / 60
+        data["y"] = 1.5 * data["x"] + 0.4 * data["c1"] + u + data["year"] / 10
+        menu = {"schema_version": 2, "version": "iv-test", "analysis_kind": "synthetic_demo", "estimator": "iv_fixed_effects",
+                "title": "IV test", "estimand": "Effect of x on y", "row_id": "row_id", "unit": "firm", "time": "year",
+                "base": {"outcome": "y", "treatment": "x", "instruments": ["z1", "z2"], "required_controls": ["c1"],
+                         "fixed_effects": ["firm", "year"], "vcov": {"type": "cluster", "cluster": "firm"}},
+                "confidence_level": 0.95,
+                "dimensions": [
+                    {"name": "instrument_set", "options": [
+                        {"id": "both", "label": "Both"},
+                        {"id": "z1", "label": "z1 only", "instruments": ["z1"], "add_controls": ["z2"]}]},
+                    {"name": "weighting", "options": [
+                        {"id": "none", "label": "Unweighted"}, {"id": "w", "label": "Weighted", "weights": "w"}]}],
+                "sample_modes": ["available"], "preferred": {"instrument_set": "both", "weighting": "none", "sample_mode": "available"}}
+        manifest = freeze_manifest(menu, data)
+        results = run_manifest(manifest, data)
+        assert validate_results(manifest, results)["passed"]
+        ssc = pf.ssc(k_adj=True, k_fixef="nonnested", G_adj=True, G_df="min")
+        direct = pf.feols("y ~ c1 | firm + year | x ~ z1 + z2", data=data, vcov={"CRV1": "firm"}, ssc=ssc, demeaner=pf.MapDemeaner(fixef_tol=1e-10))
+        preferred = results[results["preferred"]].iloc[0]
+        assert abs(preferred["estimate"] - direct.coef()["x"]) < 1e-10
+        assert abs(preferred["std_error"] - direct.se()["x"]) < 1e-10
+        first = pf.feols("x ~ z1 + z2 + c1 | firm + year", data=data, vcov={"CRV1": "firm"}, ssc=ssc, demeaner=pf.MapDemeaner(fixef_tol=1e-10))
+        one = results[(results["instrument_set"] == "z1") & (results["weighting"] == "none")].iloc[0]
+        assert abs(one["first_stage_f"] - first.tstat()["z1"] ** 2) < 1e-6
+        weighted = results[(results["instrument_set"] == "both") & (results["weighting"] == "w")].iloc[0]
+        wdirect = pf.feols("y ~ c1 | firm + year | x ~ z1 + z2", data=data, weights="w", vcov={"CRV1": "firm"}, ssc=ssc, demeaner=pf.MapDemeaner(fixef_tol=1e-10))
+        assert abs(weighted["estimate"] - wdirect.coef()["x"]) < 1e-10 and weighted["weights"] == "w"
+        assert (results["first_stage_f"] > 10).all()
+
+
 if __name__ == "__main__":
     unittest.main()

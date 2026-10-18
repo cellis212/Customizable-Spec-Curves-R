@@ -1,9 +1,10 @@
 """Python port of the reference specification-curve workflow (menu schema 2).
 
 The R implementation in ``paper/R`` is the reference. This module reproduces
-its grid order, specification identifiers, filters, samples, estimators and
-uncertainty conventions so the two can be compared row by row. It provides
-no joint inference.
+its grid order, specification identifiers, filters, samples, estimators
+(weighted fixed-effects regressions, instrumental variables with fixed effects,
+time-series means) and uncertainty conventions so the two can be compared row by
+row. It provides no joint inference.
 """
 
 from __future__ import annotations
@@ -20,15 +21,15 @@ import numpy as np
 import pandas as pd
 from scipy import stats
 
-ESTIMATORS = ("linear_fixed_effects", "time_series_mean")
+ESTIMATORS = ("linear_fixed_effects", "iv_fixed_effects", "time_series_mean")
 FILTER_OPS = ("==", "!=", ">=", "<=", ">", "<", "in", "not_in")
-REPLACEMENT_FIELDS = ("outcome", "treatment", "fixed_effects", "unit_trend", "vcov")
+REPLACEMENT_FIELDS = ("outcome", "treatment", "instruments", "fixed_effects", "unit_trend", "vcov", "weights")
 RESULT_FIELDS = (
     "panel", "formula", "estimator", "outcome", "treatment", "control_vars", "fixed_effect_terms",
     "unit_trend", "vcov", "filters", "confidence_level", "status", "error", "estimate", "std_error",
     "statistic", "p_value", "ci_lower", "ci_upper", "n_input", "n_eligible", "n_obs", "n_units",
     "n_periods", "n_clusters", "n_estimator_dropped", "sample_hash", "dropped_terms",
-    "manifest_hash", "input_hash", "facet", "rank", "role",
+    "manifest_hash", "input_hash", "facet", "rank", "role", "instruments", "weights", "first_stage_f",
 )
 RESERVED = ("spec_id", "sample_mode", "preferred", "original") + RESULT_FIELDS
 
@@ -79,6 +80,8 @@ class Spec:
     vcov: dict[str, Any]
     filters: list[dict[str, Any]] = field(default_factory=list)
     panel: str = "All specifications"
+    instruments: list[str] = field(default_factory=list)
+    weights: str | None = None
 
     @property
     def filter_signature(self) -> str:
@@ -131,13 +134,14 @@ def resolve_spec(menu: dict[str, Any], choice: dict[str, str]) -> Spec:
         fixed_effects=list(base.get("fixed_effects") or []),
         unit_trend=bool(base.get("unit_trend", False)), vcov=dict(base.get("vcov") or {}),
         filters=[dict(f) for f in base.get("filters") or []],
+        instruments=list(base.get("instruments") or []), weights=base.get("weights"),
     )
     for dim in menu["dimensions"]:
         option = find_option(menu, dim["name"], choice[dim["name"]])
         for name in REPLACEMENT_FIELDS:
             if option.get(name) is not None:
                 value = option[name]
-                setattr(spec, name, list(value) if name == "fixed_effects" else
+                setattr(spec, name, list(value) if name in ("fixed_effects", "instruments") else
                         dict(value) if name == "vcov" else value)
         for control in option.get("add_controls") or []:
             if control not in spec.controls:
@@ -149,7 +153,7 @@ def resolve_spec(menu: dict[str, Any], choice: dict[str, str]) -> Spec:
 
 
 def spec_variables(menu: dict[str, Any], spec: Spec) -> list[str]:
-    names = [spec.outcome, spec.treatment, *spec.controls, *spec.fixed_effects]
+    names = [spec.outcome, spec.treatment, *spec.instruments, *spec.controls, *spec.fixed_effects, spec.weights]
     if spec.vcov.get("type") == "cluster":
         names.append(spec.vcov["cluster"])
     names += [f["variable"] for f in spec.filters]
@@ -161,14 +165,26 @@ def spec_variables(menu: dict[str, Any], spec: Spec) -> list[str]:
     return out
 
 
+def weights_label(spec: Spec) -> str:
+    return spec.weights if spec.weights else "none"
+
+
+def instruments_label(spec: Spec) -> str:
+    return ";".join(spec.instruments)
+
+
 def model_formula(menu: dict[str, Any], spec: Spec) -> str:
     if menu["estimator"] == "time_series_mean":
         return f"{spec.outcome} ~ 1"
-    formula = f"{spec.outcome} ~ " + " + ".join([spec.treatment, *spec.controls])
+    iv = menu["estimator"] == "iv_fixed_effects"
+    rhs = list(spec.controls) if iv else [spec.treatment, *spec.controls]
+    formula = f"{spec.outcome} ~ " + (" + ".join(rhs) if rhs else "1")
     fixed = [f"{menu['unit']}[{menu['time']}]" if (spec.unit_trend and fe == menu["unit"]) else fe
              for fe in spec.fixed_effects]
     if fixed:
         formula += " | " + " + ".join(fixed)
+    if iv:
+        formula += f" | {spec.treatment} ~ " + " + ".join(spec.instruments)
     return formula
 
 
@@ -203,7 +219,7 @@ def same_choice(grid: pd.DataFrame, choice: dict[str, str]) -> pd.Series:
 
 def validate_vcov(menu: dict[str, Any], vcov: dict[str, Any]) -> None:
     abort_if(not vcov.get("type"), "Every specification needs an uncertainty convention.")
-    allowed = ("cluster", "iid", "hetero") if menu["estimator"] == "linear_fixed_effects" else ("iid", "newey_west")
+    allowed = ("iid", "newey_west") if menu["estimator"] == "time_series_mean" else ("cluster", "iid", "hetero")
     abort_if(vcov["type"] not in allowed, f"Unsupported vcov for {menu['estimator']} : {vcov['type']}")
     if vcov["type"] == "cluster":
         abort_if(not vcov.get("cluster"), "Cluster variable missing.")
@@ -261,21 +277,35 @@ def validate_menu(menu: dict[str, Any], data: pd.DataFrame) -> tuple[pd.DataFram
     for _, row in grid.iterrows():
         spec = resolve_spec(menu, row.to_dict())
         validate_vcov(menu, spec.vcov)
-        abort_if(spec.outcome is None or (menu["estimator"] == "linear_fixed_effects" and spec.treatment is None),
+        regression = menu["estimator"] != "time_series_mean"
+        abort_if(spec.outcome is None or (regression and spec.treatment is None),
                  "Every specification needs an outcome and, for regressions, a focal variable.")
-        abort_if(spec.outcome in spec.controls + [spec.treatment], "The outcome cannot also be a regressor.")
+        abort_if(spec.outcome in spec.controls + [spec.treatment] + spec.instruments,
+                 "The outcome cannot also be a regressor.")
+        if menu["estimator"] == "iv_fixed_effects":
+            abort_if(not spec.instruments, "Instrumental-variables specifications need at least one instrument.")
+            abort_if(any(z in spec.controls + [spec.treatment] for z in spec.instruments)
+                     or len(set(spec.instruments)) != len(spec.instruments),
+                     "Instruments must be distinct from the endogenous variable and the controls.")
+        else:
+            abort_if(bool(spec.instruments), "Instruments are only used by iv_fixed_effects.")
+        abort_if(spec.weights is not None and not regression, "Weights are only used by regression estimators.")
         if spec.unit_trend:
             abort_if(menu["unit"] not in spec.fixed_effects, "Unit trends require unit fixed effects.")
         variables = spec_variables(menu, spec)
         absent = [v for v in variables if v not in data.columns]
         abort_if(bool(absent), "Menu references variables absent from input data: " + ", ".join(absent))
         abort_if(not pd.api.types.is_numeric_dtype(data[spec.outcome]) or
-                 (spec.treatment is not None and not pd.api.types.is_numeric_dtype(data[spec.treatment])),
-                 "Outcome and focal variables must be numeric.")
+                 (spec.treatment is not None and not pd.api.types.is_numeric_dtype(data[spec.treatment])) or
+                 any(not pd.api.types.is_numeric_dtype(data[z]) for z in spec.instruments),
+                 "Outcome, focal, and instrument variables must be numeric.")
+        if spec.weights is not None:
+            abort_if(not pd.api.types.is_numeric_dtype(data[spec.weights]) or bool((data[spec.weights] <= 0).any()),
+                     "Weights must be positive numbers.")
         for f in spec.filters:
             abort_if(f.get("op") not in FILTER_OPS or f.get("value") is None, "Unsupported filter.")
-        signatures.append(" | ".join([model_formula(menu, spec), vcov_label(spec.vcov), spec.filter_signature,
-                                      row["sample_mode"]]))
+        signatures.append(" | ".join([model_formula(menu, spec), vcov_label(spec.vcov), weights_label(spec),
+                                      spec.filter_signature, row["sample_mode"]]))
     abort_if(len(set(signatures)) != len(signatures) and not menu.get("allow_duplicate_models"),
              "Two grid rows define the same model and sample; remove the redundancy or declare it.")
     if menu["analysis_kind"] == "application":
@@ -342,13 +372,53 @@ def estimate_time_series_mean(menu: dict[str, Any], spec: Spec, frame: pd.DataFr
             "n_obs": n, "used": frame, "dropped_terms": "", "n_clusters": None}
 
 
+def pyfixest_vcov(vcov: dict[str, Any]) -> Any:
+    kind = vcov["type"]
+    return {"CRV1": vcov["cluster"]} if kind == "cluster" else ("iid" if kind == "iid" else "hetero")
+
+
+def fit_pyfixest(formula: str, frame: pd.DataFrame, spec: Spec, vcov: Any = None, fixef_rm: str = "singleton") -> Any:
+    import warnings
+
+    import pyfixest as pf  # Imported lazily so time-series users need not install it.
+
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        return pf.feols(formula, data=frame, vcov=pyfixest_vcov(spec.vcov) if vcov is None else vcov,
+                        weights=spec.weights, fixef_rm=fixef_rm, demeaner=pf.MapDemeaner(fixef_tol=1e-10),
+                        ssc=pf.ssc(k_adj=True, k_fixef="nonnested", G_adj=True, G_df="min"))
+
+
+def effective_first_stage_f(spec: Spec, used: pd.DataFrame) -> float:
+    """Montiel Olea-Pflueger effective F for one endogenous regressor (see the R engine)."""
+    fixed = (" | " + " + ".join(spec.fixed_effects)) if spec.fixed_effects else ""
+    used = used.reset_index(drop=True)
+    first = fit_pyfixest(f"{spec.treatment} ~ " + " + ".join([*spec.instruments, *spec.controls]) + fixed, used, spec)
+    coefs = first.coef()
+    abort_if(int(first._N) != len(used) or any(z not in coefs.index for z in spec.instruments),
+             "First stage is not identified on the estimation sample.")
+    names = list(coefs.index)
+    index = [names.index(z) for z in spec.instruments]
+    pi = coefs[spec.instruments].to_numpy(dtype=float)
+    v = np.asarray(first._vcov)[np.ix_(index, index)]
+    rhs = " + ".join(spec.controls) if spec.controls else "1"
+    partial = np.column_stack([
+        np.asarray(fit_pyfixest(f"{z} ~ {rhs}{fixed}", used, spec, vcov="iid", fixef_rm="none").resid(), dtype=float)
+        for z in spec.instruments])
+    abort_if(partial.shape[0] != len(used), "First stage is not identified on the estimation sample.")
+    w = used[spec.weights].to_numpy(dtype=float) if spec.weights else np.ones(len(used))
+    zz = (partial * w[:, None]).T @ partial
+    return float(pi @ zz @ pi / np.trace(v @ zz))
+
+
 def estimate_fixed_effects(menu: dict[str, Any], spec: Spec, frame: pd.DataFrame, formula: str) -> dict[str, Any]:
     import warnings
 
     import pyfixest as pf  # Imported lazily so time-series users need not install it.
 
     kind = spec.vcov["type"]
-    vcov: Any = {"CRV1": spec.vcov["cluster"]} if kind == "cluster" else ("iid" if kind == "iid" else "hetero")
+    vcov: Any = pyfixest_vcov(spec.vcov)
+    iv = menu["estimator"] == "iv_fixed_effects"
     frame = frame.reset_index(drop=True)
     fit_formula = formula
     slope_prefix = None
@@ -364,7 +434,8 @@ def estimate_fixed_effects(menu: dict[str, Any], spec: Spec, frame: pd.DataFrame
         slope_prefix = f"{unit}::"
     with warnings.catch_warnings():
         warnings.simplefilter("ignore")
-        model = pf.feols(fit_formula, data=frame, vcov=vcov,
+        # fixest drops fixed-effect singletons by default; match it.
+        model = pf.feols(fit_formula, data=frame, vcov=vcov, weights=spec.weights, fixef_rm="singleton", demeaner=pf.MapDemeaner(fixef_tol=1e-10),
                          ssc=pf.ssc(k_adj=True, k_fixef="nonnested", G_adj=True, G_df="min"))
     coefs = model.coef()
     abort_if(spec.treatment not in coefs.index, "Focal coefficient is unidentified or absorbed.")
@@ -393,7 +464,8 @@ def estimate_fixed_effects(menu: dict[str, Any], spec: Spec, frame: pd.DataFrame
             "p_value": float(2 * stats.t.sf(abs(statistic), df=df)),
             "ci_lower": estimate - critical * se, "ci_upper": estimate + critical * se,
             "n_obs": int(model._N), "used": used, "dropped_terms": ";".join(dropped),
-            "n_clusters": int(used[spec.vcov["cluster"]].nunique()) if kind == "cluster" else None}
+            "n_clusters": int(used[spec.vcov["cluster"]].nunique()) if kind == "cluster" else None,
+            "first_stage_f": effective_first_stage_f(spec, used) if iv else None}
 
 
 def run_manifest(manifest: dict[str, Any], data: pd.DataFrame) -> pd.DataFrame:
@@ -418,6 +490,7 @@ def run_manifest(manifest: dict[str, Any], data: pd.DataFrame) -> pd.DataFrame:
                    treatment=spec.treatment or "(intercept)", control_vars=";".join(spec.controls),
                    fixed_effect_terms=";".join(spec.fixed_effects), unit_trend=spec.unit_trend,
                    vcov=vcov_label(spec.vcov), filters=spec.filter_signature,
+                   instruments=instruments_label(spec), weights=weights_label(spec), first_stage_f=np.nan,
                    confidence_level=menu["confidence_level"], status="failed", error="",
                    estimate=np.nan, std_error=np.nan, statistic=np.nan, p_value=np.nan, ci_lower=np.nan,
                    ci_upper=np.nan, n_input=len(data), n_eligible=len(frame), n_obs=np.nan, n_units=np.nan,
@@ -433,6 +506,8 @@ def run_manifest(manifest: dict[str, Any], data: pd.DataFrame) -> pd.DataFrame:
                          "dropped_terms"):
                 row[name] = fit[name]
             row["n_clusters"] = np.nan if fit["n_clusters"] is None else fit["n_clusters"]
+            if fit.get("first_stage_f") is not None:
+                row["first_stage_f"] = fit["first_stage_f"]
             used = fit["used"]
             row["n_units"] = used[menu["unit"]].nunique()
             row["n_periods"] = used[menu["time"]].nunique()
@@ -441,6 +516,8 @@ def run_manifest(manifest: dict[str, Any], data: pd.DataFrame) -> pd.DataFrame:
             values = [row[k] for k in ("estimate", "std_error", "p_value", "ci_lower", "ci_upper")]
             abort_if(not all(np.isfinite(values)), "Uncertainty is not finite.")
             abort_if(spec.vcov["type"] == "cluster" and row["n_clusters"] < 2, "Fewer than two clusters remain.")
+            abort_if(menu["estimator"] == "iv_fixed_effects" and not np.isfinite(row["first_stage_f"]),
+                     "First-stage F is not finite.")
             row["status"] = "ok"
         except Exception as error:  # Every failure is retained as a row with its reason.
             row["error"] = str(error)
@@ -461,7 +538,10 @@ def validate_results(manifest: dict[str, Any], results: pd.DataFrame) -> dict[st
         spec = resolve_spec(menu, row.to_dict())
         got = results.iloc[i]
         abort_if(got["outcome"] != spec.outcome or got["vcov"] != vcov_label(spec.vcov)
-                 or got["formula"] != model_formula(menu, spec) or got["filters"] != spec.filter_signature,
+                 or got["formula"] != model_formula(menu, spec) or got["filters"] != spec.filter_signature
+                 or ("weights" in results and got["weights"] != weights_label(spec))
+                 or ("instruments" in results and (got["instruments"] if isinstance(got["instruments"], str) else "")
+                     != instruments_label(spec)),
                  f"Result convention changed for {row['spec_id']}")
     failed = results["status"] == "failed"
     abort_if((failed & (results["error"] == "")).any(), "Failed specifications need an explicit reason.")

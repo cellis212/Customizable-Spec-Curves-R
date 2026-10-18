@@ -1,4 +1,5 @@
 # A deliberately scoped reference implementation: linear fixed-effects models
+# (optionally weighted), linear instrumental-variables models with fixed effects,
 # and time-series means, declared pointwise uncertainty conventions, and
 # descriptive sensitivity summaries. It provides no joint inference.
 
@@ -21,14 +22,15 @@ source_hashes <- function(root) {
   stats::setNames(vapply(file.path(root, paths), file_sha256, ""), paths)
 }
 
-estimators <- c("linear_fixed_effects", "time_series_mean")
+estimators <- c("linear_fixed_effects", "iv_fixed_effects", "time_series_mean")
 filter_ops <- c("==", "!=", ">=", "<=", ">", "<", "in", "not_in")
-replacement_fields <- c("outcome", "treatment", "fixed_effects", "unit_trend", "vcov")
+replacement_fields <- c("outcome", "treatment", "instruments", "fixed_effects", "unit_trend", "vcov", "weights")
 result_fields <- c("panel", "formula", "estimator", "outcome", "treatment", "control_vars", "fixed_effect_terms",
                    "unit_trend", "vcov", "filters", "confidence_level", "status", "error", "estimate",
                    "std_error", "statistic", "p_value", "ci_lower", "ci_upper", "n_input", "n_eligible",
                    "n_obs", "n_units", "n_periods", "n_clusters", "n_estimator_dropped", "sample_hash",
-                   "dropped_terms", "manifest_hash", "input_hash", "facet", "rank", "role")
+                   "dropped_terms", "manifest_hash", "input_hash", "facet", "rank", "role",
+                   "instruments", "weights", "first_stage_f")
 reserved_names <- c("spec_id", "sample_mode", "preferred", "original", result_fields)
 simple_name <- "^[A-Za-z][A-Za-z0-9_]*$"
 
@@ -73,15 +75,15 @@ vcov_label <- function(vcov) {
 # and controls accumulate.
 resolve_spec <- function(menu, choice) {
   base <- menu$base
-  spec <- list(outcome = base$outcome, treatment = base$treatment,
+  spec <- list(outcome = base$outcome, treatment = base$treatment, instruments = unlist(base$instruments),
                controls = unlist(base$required_controls), fixed_effects = unlist(base$fixed_effects),
-               unit_trend = isTRUE(base$unit_trend), vcov = normalise_vcov(base$vcov),
+               unit_trend = isTRUE(base$unit_trend), vcov = normalise_vcov(base$vcov), weights = base$weights,
                filters = normalise_filters(base$filters), panel = "All specifications")
   for (d in menu_dimensions(menu)) {
     option <- find_option(menu, d$name, choice[[d$name]])
     for (field in replacement_fields) if (!is.null(option[[field]])) {
       spec[[field]] <- if (field == "vcov") normalise_vcov(option$vcov) else
-        if (field == "fixed_effects") unlist(option$fixed_effects) else option[[field]]
+        if (field %in% c("fixed_effects", "instruments")) unlist(option[[field]]) else option[[field]]
     }
     spec$controls <- unique(c(spec$controls, unlist(option$add_controls)))
     spec$filters <- c(spec$filters, normalise_filters(option$filters))
@@ -93,18 +95,24 @@ resolve_spec <- function(menu, choice) {
 }
 
 spec_variables <- function(menu, spec) {
-  unique(c(spec$outcome, spec$treatment, spec$controls, spec$fixed_effects,
+  unique(c(spec$outcome, spec$treatment, spec$instruments, spec$controls, spec$fixed_effects, spec$weights,
            if (identical(spec$vcov$type, "cluster")) spec$vcov$cluster,
            vapply(spec$filters, function(f) f$variable, ""),
            menu$unit, menu$time, menu$row_id))
 }
 
+weights_label <- function(spec) if (is.null(spec$weights)) "none" else spec$weights
+instruments_label <- function(spec) if (length(spec$instruments)) paste(spec$instruments, collapse = ";") else ""
+
 model_formula <- function(menu, spec) {
   if (menu$estimator == "time_series_mean") return(paste(spec$outcome, "~ 1"))
-  formula <- paste(spec$outcome, "~", paste(c(spec$treatment, spec$controls), collapse = " + "))
+  iv <- menu$estimator == "iv_fixed_effects"
+  rhs <- if (iv) spec$controls else c(spec$treatment, spec$controls)
+  formula <- paste(spec$outcome, "~", if (length(rhs)) paste(rhs, collapse = " + ") else "1")
   fe <- spec$fixed_effects
   if (spec$unit_trend) fe[fe == menu$unit] <- paste0(menu$unit, "[", menu$time, "]")
   if (length(fe)) formula <- paste(formula, "|", paste(fe, collapse = " + "))
+  if (iv) formula <- paste(formula, "|", spec$treatment, "~", paste(spec$instruments, collapse = " + "))
   formula
 }
 
@@ -138,7 +146,7 @@ same_choice <- function(grid, choice) {
 
 validate_vcov <- function(menu, vcov) {
   abort_if(is.null(vcov$type), "Every specification needs an uncertainty convention.")
-  allowed <- if (menu$estimator == "linear_fixed_effects") c("cluster", "iid", "hetero") else c("iid", "newey_west")
+  allowed <- if (menu$estimator == "time_series_mean") c("iid", "newey_west") else c("cluster", "iid", "hetero")
   abort_if(!vcov$type %in% allowed, paste("Unsupported vcov for", menu$estimator, ":", vcov$type))
   if (vcov$type == "cluster") abort_if(is.null(vcov$cluster) || !nzchar(vcov$cluster), "Cluster variable missing.")
   if (vcov$type == "newey_west") abort_if(!is.numeric(vcov$lags) || vcov$lags < 0 || vcov$lags != round(vcov$lags),
@@ -196,18 +204,28 @@ validate_menu <- function(menu, data) {
   for (i in seq_len(nrow(built$grid))) {
     spec <- resolve_spec(menu, built$grid[i, , drop = FALSE])
     validate_vcov(menu, spec$vcov)
-    abort_if(is.null(spec$outcome) || (menu$estimator == "linear_fixed_effects" && is.null(spec$treatment)),
+    regression <- menu$estimator != "time_series_mean"
+    abort_if(is.null(spec$outcome) || (regression && is.null(spec$treatment)),
              "Every specification needs an outcome and, for regressions, a focal variable.")
-    abort_if(spec$outcome %in% c(spec$controls, spec$treatment), "The outcome cannot also be a regressor.")
+    abort_if(spec$outcome %in% c(spec$controls, spec$treatment, spec$instruments), "The outcome cannot also be a regressor.")
+    if (menu$estimator == "iv_fixed_effects") {
+      abort_if(!length(spec$instruments), "Instrumental-variables specifications need at least one instrument.")
+      abort_if(any(spec$instruments %in% c(spec$treatment, spec$controls)) || anyDuplicated(spec$instruments) > 0L,
+               "Instruments must be distinct from the endogenous variable and the controls.")
+    } else abort_if(length(spec$instruments) > 0L, "Instruments are only used by iv_fixed_effects.")
+    abort_if(!is.null(spec$weights) && !regression, "Weights are only used by regression estimators.")
     if (spec$unit_trend) abort_if(!menu$unit %in% spec$fixed_effects, "Unit trends require unit fixed effects.")
     vars <- spec_variables(menu, spec)
     abort_if(any(!grepl(simple_name, vars)), "Use simple variable names in the menu.")
     abort_if(!all(vars %in% names(data)), paste("Menu references variables absent from input data:",
              paste(setdiff(vars, names(data)), collapse = ", ")))
-    abort_if(!is.numeric(data[[spec$outcome]]) || (!is.null(spec$treatment) && !is.numeric(data[[spec$treatment]])),
-             "Outcome and focal variables must be numeric.")
+    abort_if(!is.numeric(data[[spec$outcome]]) || (!is.null(spec$treatment) && !is.numeric(data[[spec$treatment]])) ||
+               any(!vapply(data[spec$instruments], is.numeric, logical(1))),
+             "Outcome, focal, and instrument variables must be numeric.")
+    if (!is.null(spec$weights)) abort_if(!is.numeric(data[[spec$weights]]) || any(data[[spec$weights]] <= 0, na.rm = TRUE),
+                                         "Weights must be positive numbers.")
     for (f in spec$filters) abort_if(!f$op %in% filter_ops || is.null(f$value), "Unsupported filter.")
-    signatures[i] <- paste(model_formula(menu, spec), vcov_label(spec$vcov), spec$filter_signature,
+    signatures[i] <- paste(model_formula(menu, spec), vcov_label(spec$vcov), weights_label(spec), spec$filter_signature,
                            built$grid$sample_mode[i], sep = " | ")
   }
   abort_if(anyDuplicated(signatures) > 0L && !isTRUE(menu$allow_duplicate_models),
@@ -300,23 +318,59 @@ estimate_time_series_mean <- function(menu, spec, frame) {
        n_obs = n, used = frame, dropped_terms = "", n_clusters = NA_integer_)
 }
 
-estimate_fixed_effects <- function(menu, spec, frame, formula_text) {
+fixest_ssc <- function() fixest::ssc(K.adj = TRUE, K.fixef = "nonnested", G.adj = TRUE, t.df = "min")
+
+# Fixed effects are removed by iterative demeaning; a tight convergence tolerance
+# (fixest's default is 1e-6) keeps results independent of the algorithm, so R and
+# Python agree to about 1e-10 even with several unbalanced fixed effects.
+
+fit_feols <- function(formula_text, frame, spec, ...) {
   vcov <- switch(spec$vcov$type, cluster = stats::as.formula(paste("~", spec$vcov$cluster)),
                  iid = "iid", hetero = "hetero")
-  model <- fixest::feols(stats::as.formula(formula_text), data = frame, vcov = vcov,
-    ssc = fixest::ssc(K.adj = TRUE, K.fixef = "nonnested", G.adj = TRUE, t.df = "min"),
-    notes = FALSE, warn = FALSE, nthreads = 1L)
+  weights <- if (is.null(spec$weights)) NULL else stats::as.formula(paste("~", spec$weights))
+  fixest::feols(stats::as.formula(formula_text), data = frame, vcov = vcov, weights = weights, ssc = fixest_ssc(),
+                fixef.tol = 1e-10, notes = FALSE, warn = FALSE, nthreads = 1L, vcov_fix = FALSE, ...)
+}
+
+# Montiel Olea-Pflueger effective first-stage F for one endogenous regressor:
+# pi' (Z'WZ) pi / trace(V_pi Z'WZ), with Z the instruments after partialling out
+# the controls and fixed effects, and V_pi the first-stage covariance under the
+# specification's own uncertainty convention (equal to the robust Wald F when
+# there is one instrument).
+effective_first_stage_f <- function(spec, used) {
+  rhs <- c(spec$instruments, spec$controls)
+  fe <- if (length(spec$fixed_effects)) paste("|", paste(spec$fixed_effects, collapse = " + ")) else ""
+  first <- fit_feols(paste(spec$treatment, "~", paste(rhs, collapse = " + "), fe), used, spec)
+  abort_if(stats::nobs(first) != nrow(used) || !all(spec$instruments %in% names(stats::coef(first))),
+           "First stage is not identified on the estimation sample.")
+  pi <- stats::coef(first)[spec$instruments]
+  v <- stats::vcov(first)[spec$instruments, spec$instruments, drop = FALSE]
+  partial <- vapply(spec$instruments, function(z) {
+    rhs_z <- if (length(spec$controls)) paste(spec$controls, collapse = " + ") else "1"
+    stats::residuals(fit_feols(paste(z, "~", rhs_z, fe), used, utils::modifyList(spec, list(vcov = list(type = "iid"))),
+                               fixef.rm = "none"))
+  }, numeric(nrow(used)))
+  w <- if (is.null(spec$weights)) rep(1, nrow(used)) else used[[spec$weights]]
+  zz <- crossprod(partial * sqrt(w))
+  drop(t(pi) %*% zz %*% pi) / sum(diag(v %*% zz))
+}
+
+estimate_fixed_effects <- function(menu, spec, frame, formula_text) {
+  model <- fit_feols(formula_text, frame, spec)
+  iv <- menu$estimator == "iv_fixed_effects"
+  focal <- if (iv) paste0("fit_", spec$treatment) else spec$treatment
   table <- fixest::coeftable(model)
-  abort_if(!spec$treatment %in% rownames(table), "Focal coefficient is unidentified or absorbed.")
+  abort_if(!focal %in% rownames(table), "Focal coefficient is unidentified or absorbed.")
   abort_if(any(unlist(menu$base$required_controls) %in% model$collin.var),
            "A required control is unidentified or absorbed.")
-  interval <- stats::confint(model, parm = spec$treatment, level = menu$confidence_level)
+  interval <- stats::confint(model, parm = focal, level = menu$confidence_level)
   used <- frame[fixest::obs(model), , drop = FALSE]
-  list(estimate = unname(table[spec$treatment, 1L]), std_error = unname(table[spec$treatment, 2L]),
-       statistic = unname(table[spec$treatment, 3L]), p_value = unname(table[spec$treatment, 4L]),
+  list(estimate = unname(table[focal, 1L]), std_error = unname(table[focal, 2L]),
+       statistic = unname(table[focal, 3L]), p_value = unname(table[focal, 4L]),
        ci_lower = unname(interval[1L, 1L]), ci_upper = unname(interval[1L, 2L]),
        n_obs = stats::nobs(model), used = used, dropped_terms = paste(model$collin.var, collapse = ";"),
-       n_clusters = if (spec$vcov$type == "cluster") length(unique(used[[spec$vcov$cluster]])) else NA_integer_)
+       n_clusters = if (spec$vcov$type == "cluster") length(unique(used[[spec$vcov$cluster]])) else NA_integer_,
+       first_stage_f = if (iv) effective_first_stage_f(spec, used) else NA_real_)
 }
 
 run_manifest <- function(manifest, data) {
@@ -339,6 +393,7 @@ run_manifest <- function(manifest, data) {
       treatment = if (is.null(spec$treatment)) "(intercept)" else spec$treatment,
       control_vars = paste(spec$controls, collapse = ";"), fixed_effect_terms = paste(spec$fixed_effects, collapse = ";"),
       unit_trend = spec$unit_trend, vcov = vcov_label(spec$vcov), filters = spec$filter_signature,
+      instruments = instruments_label(spec), weights = weights_label(spec), first_stage_f = NA_real_,
       confidence_level = menu$confidence_level, status = "failed", error = "",
       estimate = NA_real_, std_error = NA_real_, statistic = NA_real_, p_value = NA_real_,
       ci_lower = NA_real_, ci_upper = NA_real_, n_input = nrow(data), n_eligible = nrow(frame),
@@ -352,6 +407,7 @@ run_manifest <- function(manifest, data) {
         estimate_fixed_effects(menu, spec, frame, formula_text)
       for (field in c("estimate", "std_error", "statistic", "p_value", "ci_lower", "ci_upper", "n_obs",
                       "dropped_terms", "n_clusters")) row[[field]] <- fit[[field]]
+      if (!is.null(fit$first_stage_f)) row$first_stage_f <- fit$first_stage_f
       row$n_units <- length(unique(fit$used[[menu$unit]]))
       row$n_periods <- length(unique(fit$used[[menu$time]]))
       row$n_estimator_dropped <- nrow(frame) - row$n_obs
@@ -359,6 +415,7 @@ run_manifest <- function(manifest, data) {
       abort_if(any(!is.finite(unlist(row[c("estimate", "std_error", "p_value", "ci_lower", "ci_upper")]))),
                "Uncertainty is not finite.")
       abort_if(spec$vcov$type == "cluster" && row$n_clusters < 2L, "Fewer than two clusters remain.")
+      abort_if(menu$estimator == "iv_fixed_effects" && !is.finite(row$first_stage_f), "First-stage F is not finite.")
       row$status <- "ok"
     }, error = function(e) {
       row$error <<- conditionMessage(e)
@@ -385,7 +442,10 @@ validate_results <- function(manifest, results) {
     spec <- resolve_spec(menu, grid[i, , drop = FALSE])
     abort_if(results$outcome[i] != spec$outcome || results$vcov[i] != vcov_label(spec$vcov) ||
                results$estimator[i] != menu$estimator || results$confidence_level[i] != menu$confidence_level ||
-               results$formula[i] != model_formula(menu, spec) || results$filters[i] != spec$filter_signature,
+               results$formula[i] != model_formula(menu, spec) || results$filters[i] != spec$filter_signature ||
+               (!is.null(results$weights) && !identical(as.character(results$weights[i]), weights_label(spec))) ||
+               (!is.null(results$instruments) && !identical(ifelse(is.na(results$instruments[i]), "", as.character(results$instruments[i])),
+                                                            instruments_label(spec))),
              paste("Result convention changed for", grid$spec_id[i]))
   }
   abort_if(any(!results$status %in% c("ok", "failed")), "Every result needs an explicit status.")
@@ -399,6 +459,8 @@ validate_results <- function(manifest, results) {
   abort_if(anyNA(ok$sample_hash) || any(!grepl("^[0-9a-f]{64}$", ok$sample_hash)), "Successful rows need observation hashes.")
   abort_if(any(ok$std_error < 0 | ok$p_value < 0 | ok$p_value > 1 | ok$ci_lower > ok$estimate |
                  ok$ci_upper < ok$estimate | ok$n_obs <= 0), "Invalid uncertainty or sample size.")
+  if (menu$estimator == "iv_fixed_effects")
+    abort_if(any(!is.finite(ok$first_stage_f) | ok$first_stage_f < 0), "IV rows need a first-stage F statistic.")
   clustered <- grepl("^cluster", ok$vcov)
   abort_if(any(!is.finite(ok$n_clusters[clustered]) | ok$n_clusters[clustered] < 2), "Clustered rows need clusters.")
   common <- ok[ok$sample_mode == "common", , drop = FALSE]
@@ -462,6 +524,7 @@ execution_plan <- function(manifest, data) {
     data.frame(spec_id = grid$spec_id[i], sample_mode = grid$sample_mode[i], panel = spec$panel,
       estimator = menu$estimator, outcome = spec$outcome,
       treatment = if (is.null(spec$treatment)) "" else spec$treatment,
+      instruments = paste(spec$instruments, collapse = " "), weights = if (is.null(spec$weights)) "" else spec$weights,
       controls = paste(spec$controls, collapse = " "), fixed_effects = paste(spec$fixed_effects, collapse = " "),
       unit_trend = as.integer(spec$unit_trend), unit = menu$unit, time = menu$time, row_id = menu$row_id,
       vcov_type = spec$vcov$type, cluster = if (is.null(spec$vcov$cluster)) "" else spec$vcov$cluster,

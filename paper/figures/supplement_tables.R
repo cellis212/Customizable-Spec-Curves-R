@@ -32,10 +32,14 @@ menu_table <- function(id, path) {
              "\\toprule", "Decision & Option & Justification \\\\", "\\midrule")
   for (d in menu$dimensions) {
     first <- TRUE
+    previous <- NULL
     for (o in d$options) {
       label <- if (identical(o$id, menu$preferred[[d$name]])) paste0(escape(o$label), "$^{\\ast}$") else escape(o$label)
-      lines <- c(lines, sprintf("%s & %s & %s \\\\", if (first) escape(d$label) else "", label,
-                                escape(if (is.null(o$justification)) "" else o$justification)))
+      why <- if (is.null(o$justification)) "" else o$justification
+      # A run of options with the same justification (e.g. leave one state out) prints it once.
+      shown <- if (identical(why, previous)) "" else why
+      lines <- c(lines, sprintf("%s & %s & %s \\\\", if (first) escape(d$label) else "", label, escape(shown)))
+      previous <- why
       first <- FALSE
     }
     lines <- c(lines, "\\addlinespace")
@@ -95,4 +99,7 @@ menu_table("btmr2021", file.path(out, "table_menu_btmr.tex"))
 bll_options_table(file.path(out, "table_options_bll.tex"))
 portfolio_results_table("cz_am", file.path(out, "table_results_cz.tex"))
 portfolio_results_table("cz_bliq", file.path(out, "table_results_bliq.tex"))
+menu_table("fi2015", file.path(out, "table_menu_fi.tex"))
+menu_table("cfr2010", file.path(out, "table_menu_cfr.tex"))
+menu_table("bp2005", file.path(out, "table_menu_bp.tex"))
 cat("Supplement tables written to", normalizePath(out), "\n")

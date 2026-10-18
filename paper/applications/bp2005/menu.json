@@ -1,0 +1,469 @@
+{
+  "schema_version": 2,
+  "version": "bp-v1",
+  "analysis_kind": "application",
+  "estimator": "iv_fixed_effects",
+  "title": "Rural bank branches and poverty in India: Burgess and Pande (2005)",
+  "estimand": "Effect of rural bank expansion on the rural poverty headcount ratio (percentage points), 2SLS with instruments from the 1977-1990 branch-licensing rule; each panel measures bank expansion differently.",
+  "estimate_label": "2SLS coefficient on the banking measure",
+  "row_id": "row_id",
+  "unit": "state",
+  "time": "year",
+  "base": {
+    "outcome": "h1",
+    "treatment": "runbfor",
+    "instruments": [
+      "ubt77",
+      "ubt90"
+    ],
+    "required_controls": [
+      "ubt61",
+      "ubdum77",
+      "ubdum90"
+    ],
+    "fixed_effects": [
+      "state",
+      "year"
+    ],
+    "vcov": {
+      "type": "cluster",
+      "cluster": "state"
+    }
+  },
+  "confidence_level": 0.95,
+  "panel_by": "bank_measure",
+  "sample_modes": [
+    "available"
+  ],
+  "dimensions": [
+    {
+      "name": "bank_measure",
+      "label": "Banking measure",
+      "options": [
+        {
+          "id": "branches",
+          "label": "Rural branches per capita",
+          "treatment": "runbfor",
+          "justification": "BP Table 3 (baseline)."
+        },
+        {
+          "id": "credit",
+          "label": "Rural credit share",
+          "treatment": "rurcrsh",
+          "justification": "BP Table 4 instruments the rural share of credit with the same rule."
+        },
+        {
+          "id": "savings",
+          "label": "Rural savings share",
+          "treatment": "rursavsh",
+          "justification": "BP Table 4 instruments the rural share of savings with the same rule."
+        }
+      ]
+    },
+    {
+      "name": "instrument_set",
+      "label": "Instrument set",
+      "options": [
+        {
+          "id": "both",
+          "label": "Post-1976 and post-1989 trends",
+          "justification": "BP baseline: both breaks of the 1:4 licensing rule."
+        },
+        {
+          "id": "post1976",
+          "label": "Post-1976 trend only",
+          "instruments": [
+            "ubt77"
+          ],
+          "add_controls": [
+            "ubt90"
+          ],
+          "justification": "Leave one instrument out: the post-1989 trend enters as a control, relaxing its exclusion restriction (BP Table 3 column 6 uses the 1977 break alone)."
+        },
+        {
+          "id": "post1989",
+          "label": "Post-1989 trend only",
+          "instruments": [
+            "ubt90"
+          ],
+          "add_controls": [
+            "ubt77"
+          ],
+          "justification": "Leave one instrument out: the post-1976 trend enters as a control (BP Table 3 column 7 uses the 1990 break alone)."
+        }
+      ]
+    },
+    {
+      "name": "controls",
+      "label": "Controls",
+      "options": [
+        {
+          "id": "initial",
+          "label": "Initial-condition trends",
+          "add_controls": [
+            "popt61",
+            "popt77",
+            "popd77",
+            "popt90",
+            "popdum90",
+            "rursht61",
+            "rursht77",
+            "rurshd77",
+            "rursht90",
+            "rurshd90",
+            "stint61",
+            "stint77",
+            "stin77d",
+            "stint90",
+            "stindum90"
+          ],
+          "justification": "BP baseline: 1961 population density, rural share and income, interacted with the same trends and breaks."
+        },
+        {
+          "id": "none",
+          "label": "Break terms only",
+          "justification": "The identifying variation is the trend break in 1961 branches; other initial conditions are omitted."
+        },
+        {
+          "id": "policy",
+          "label": "Plus policy controls",
+          "add_controls": [
+            "popt61",
+            "popt77",
+            "popd77",
+            "popt90",
+            "popdum90",
+            "rursht61",
+            "rursht77",
+            "rurshd77",
+            "rursht90",
+            "rurshd90",
+            "stint61",
+            "stint77",
+            "stin77d",
+            "stint90",
+            "stindum90",
+            "clre",
+            "hcapsh2",
+            "odevsh2"
+          ],
+          "justification": "BP Table 5: land reform, health and education spending, other development spending."
+        },
+        {
+          "id": "politics",
+          "label": "Plus policy and political controls",
+          "add_controls": [
+            "popt61",
+            "popt77",
+            "popd77",
+            "popt90",
+            "popdum90",
+            "rursht61",
+            "rursht77",
+            "rurshd77",
+            "rursht90",
+            "rurshd90",
+            "stint61",
+            "stint77",
+            "stin77d",
+            "stint90",
+            "stindum90",
+            "clre",
+            "hcapsh2",
+            "odevsh2",
+            "pcona",
+            "pjan",
+            "phdlft",
+            "preg",
+            "phind"
+          ],
+          "justification": "BP Table 5: party shares in state legislatures."
+        }
+      ]
+    },
+    {
+      "name": "years",
+      "label": "Years",
+      "options": [
+        {
+          "id": "all",
+          "label": "All years",
+          "justification": "BP baseline."
+        },
+        {
+          "id": "survey",
+          "label": "NSS survey years only",
+          "filters": [
+            {
+              "variable": "survey_year",
+              "op": "==",
+              "value": 1
+            }
+          ],
+          "justification": "BP Table 3 survey-year check: poverty is measured directly only in National Sample Survey rounds."
+        }
+      ]
+    },
+    {
+      "name": "states",
+      "label": "States",
+      "options": [
+        {
+          "id": "all",
+          "label": "All 16 states",
+          "justification": "BP baseline."
+        },
+        {
+          "id": "drop_1",
+          "label": "Without Andhra Pradesh",
+          "filters": [
+            {
+              "variable": "state",
+              "op": "!=",
+              "value": 1
+            }
+          ],
+          "justification": "Leave one state out: with 16 clusters no single state should carry the estimate."
+        },
+        {
+          "id": "drop_2",
+          "label": "Without Assam",
+          "filters": [
+            {
+              "variable": "state",
+              "op": "!=",
+              "value": 2
+            }
+          ],
+          "justification": "Leave one state out: with 16 clusters no single state should carry the estimate."
+        },
+        {
+          "id": "drop_3",
+          "label": "Without Bihar",
+          "filters": [
+            {
+              "variable": "state",
+              "op": "!=",
+              "value": 3
+            }
+          ],
+          "justification": "Leave one state out: with 16 clusters no single state should carry the estimate."
+        },
+        {
+          "id": "drop_4",
+          "label": "Without Gujarat",
+          "filters": [
+            {
+              "variable": "state",
+              "op": "!=",
+              "value": 4
+            }
+          ],
+          "justification": "Leave one state out: with 16 clusters no single state should carry the estimate."
+        },
+        {
+          "id": "drop_5",
+          "label": "Without Haryana",
+          "filters": [
+            {
+              "variable": "state",
+              "op": "!=",
+              "value": 5
+            }
+          ],
+          "justification": "Leave one state out: with 16 clusters no single state should carry the estimate."
+        },
+        {
+          "id": "drop_7",
+          "label": "Without Jammu and Kashmir",
+          "filters": [
+            {
+              "variable": "state",
+              "op": "!=",
+              "value": 7
+            }
+          ],
+          "justification": "Leave one state out: with 16 clusters no single state should carry the estimate."
+        },
+        {
+          "id": "drop_8",
+          "label": "Without Karnataka",
+          "filters": [
+            {
+              "variable": "state",
+              "op": "!=",
+              "value": 8
+            }
+          ],
+          "justification": "Leave one state out: with 16 clusters no single state should carry the estimate."
+        },
+        {
+          "id": "drop_9",
+          "label": "Without Kerala",
+          "filters": [
+            {
+              "variable": "state",
+              "op": "!=",
+              "value": 9
+            }
+          ],
+          "justification": "Leave one state out: with 16 clusters no single state should carry the estimate."
+        },
+        {
+          "id": "drop_10",
+          "label": "Without Madhya Pradesh",
+          "filters": [
+            {
+              "variable": "state",
+              "op": "!=",
+              "value": 10
+            }
+          ],
+          "justification": "Leave one state out: with 16 clusters no single state should carry the estimate."
+        },
+        {
+          "id": "drop_11",
+          "label": "Without Maharashtra",
+          "filters": [
+            {
+              "variable": "state",
+              "op": "!=",
+              "value": 11
+            }
+          ],
+          "justification": "Leave one state out: with 16 clusters no single state should carry the estimate."
+        },
+        {
+          "id": "drop_14",
+          "label": "Without Orissa",
+          "filters": [
+            {
+              "variable": "state",
+              "op": "!=",
+              "value": 14
+            }
+          ],
+          "justification": "Leave one state out: with 16 clusters no single state should carry the estimate."
+        },
+        {
+          "id": "drop_15",
+          "label": "Without Punjab",
+          "filters": [
+            {
+              "variable": "state",
+              "op": "!=",
+              "value": 15
+            }
+          ],
+          "justification": "Leave one state out: with 16 clusters no single state should carry the estimate."
+        },
+        {
+          "id": "drop_16",
+          "label": "Without Rajasthan",
+          "filters": [
+            {
+              "variable": "state",
+              "op": "!=",
+              "value": 16
+            }
+          ],
+          "justification": "Leave one state out: with 16 clusters no single state should carry the estimate."
+        },
+        {
+          "id": "drop_18",
+          "label": "Without Tamil Nadu",
+          "filters": [
+            {
+              "variable": "state",
+              "op": "!=",
+              "value": 18
+            }
+          ],
+          "justification": "Leave one state out: with 16 clusters no single state should carry the estimate."
+        },
+        {
+          "id": "drop_20",
+          "label": "Without Uttar Pradesh",
+          "filters": [
+            {
+              "variable": "state",
+              "op": "!=",
+              "value": 20
+            }
+          ],
+          "justification": "Leave one state out: with 16 clusters no single state should carry the estimate."
+        },
+        {
+          "id": "drop_21",
+          "label": "Without West Bengal",
+          "filters": [
+            {
+              "variable": "state",
+              "op": "!=",
+              "value": 21
+            }
+          ],
+          "justification": "Leave one state out: with 16 clusters no single state should carry the estimate."
+        }
+      ]
+    }
+  ],
+  "preferred": {
+    "bank_measure": "branches",
+    "instrument_set": "both",
+    "controls": "initial",
+    "years": "all",
+    "states": "all",
+    "sample_mode": "available"
+  },
+  "original_specifications": [
+    {
+      "bank_measure": "credit",
+      "instrument_set": "both",
+      "controls": "initial",
+      "years": "all",
+      "states": "all",
+      "sample_mode": "available"
+    },
+    {
+      "bank_measure": "savings",
+      "instrument_set": "both",
+      "controls": "initial",
+      "years": "all",
+      "states": "all",
+      "sample_mode": "available"
+    },
+    {
+      "bank_measure": "branches",
+      "instrument_set": "both",
+      "controls": "policy",
+      "years": "all",
+      "states": "all",
+      "sample_mode": "available"
+    },
+    {
+      "bank_measure": "branches",
+      "instrument_set": "both",
+      "controls": "politics",
+      "years": "all",
+      "states": "all",
+      "sample_mode": "available"
+    },
+    {
+      "bank_measure": "branches",
+      "instrument_set": "both",
+      "controls": "initial",
+      "years": "survey",
+      "states": "all",
+      "sample_mode": "available"
+    }
+  ],
+  "reference": {
+    "estimate": -4.74,
+    "std_error": 1.79,
+    "tolerance": 0.005,
+    "source": "Burgess and Pande (2005), American Economic Review 95(3), Table 3, column 3 (2SLS, N = 627)"
+  },
+  "joint_inference": "not_implemented",
+  "notes": "Every specification reports the Montiel Olea-Pflueger effective first-stage F under the same clustered covariance. 16 clusters (15 when a state is left out); confidence intervals use t critical values with G-1 degrees of freedom. Policy controls are missing for some state-years, so those specifications use fewer observations, as in BP Table 5."
+}
