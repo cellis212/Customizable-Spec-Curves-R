@@ -25,6 +25,8 @@
 !/tools/test_publication_policy.py
 !/paper/
 !/paper/run.R
+!/paper/scripts/
+!/paper/scripts/acquire_mitton_materials.py
 !/paper/R/
 !/paper/R/*.R
 !/paper/tests/

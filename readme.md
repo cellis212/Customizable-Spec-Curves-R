@@ -24,6 +24,7 @@ The source layout is:
 - `paper/R/`: model, sample, provenance, and plotting functions.
 - `paper/config/demo.json`: the generated-data specification menu.
 - `paper/config/applications.json`: the two unselected application slots.
+- `paper/scripts/acquire_mitton_materials.py`: preserve a public source download with URL, retrieval time, content type, size, and SHA-256 provenance.
 - `paper/tests/`: checks for missing/duplicated rows, changed inputs/manifests, common samples, unidentified coefficients, and baseline reproduction.
 - `paper/manuscript/`: Quarto source, section files, and verified seed references.
 
@@ -35,6 +36,18 @@ Rscript paper/run.R estimate /path/to/manifest.json /path/to/input.csv /path/to/
 ```
 
 Freezing saves the complete grid, input hash, and analysis-source hashes. Keep the manifest and its `.sha256` sidecar together. A changed menu, input, or analysis source requires a new manifest version. CSV input is converted to an R data frame before hashing; keep variable types and input conventions stable between freezing and estimation. Failed or unidentified specifications remain in the results, block assembly, and must be addressed explicitly. Summary fractions are descriptive properties of the chosen set; pointwise intervals do not provide joint inference.
+
+To preserve an observed public article, code archive, or source document locally, use the acquisition helper (Python 3 and `curl` required):
+
+```sh
+python3 paper/scripts/acquire_mitton_materials.py \
+  --url 'https://www.liuyanecon.com/wp-content/uploads/Mitton-2022a.pdf' \
+  --destination /path/to/local-materials/mitton-published.pdf \
+  --kind pdf \
+  --source-title 'Mitton (2022), published RFS article'
+```
+
+The helper rejects an unexpected PDF/ZIP response, preserves original bytes, and verifies an existing file against its provenance before reusing it. Keep its download and adjacent `.provenance.json` file outside the source checkout. It does not establish source rights, obtain licensed databases, or execute downloaded code. Downloading the article does not obtain its replication code. Only a verified original package should be described as original replication code.
 
 New commits use an explicit source allowlist, checked by local commit/push hooks and continuous integration. Data, generated figures/tables/PDFs, run records, transcripts, and project planning files are excluded. The three original public images below are retained unchanged. The checks are guardrails; review the staged diff before publishing source.
 

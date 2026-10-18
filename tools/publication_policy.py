@@ -20,6 +20,7 @@ EXACT_PATHS = {
     "spec_curve_print_curve_sample.R", "spec_curve_run_models_sample.R",
     ".githooks/pre-commit", ".githooks/pre-push",
     ".github/workflows/check.yml", "paper/run.R",
+    "paper/scripts/acquire_mitton_materials.py",
     "paper/config/demo.json", "paper/config/applications.json",
     "paper/manuscript/paper.qmd", "paper/manuscript/_quarto.yml",
     "paper/manuscript/references.bib",
