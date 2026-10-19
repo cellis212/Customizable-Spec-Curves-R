@@ -155,6 +155,71 @@ bandwidth_plot <- function(run, path, width, height, base_size = 9) {
   invisible(r)
 }
 
+# Structural (GMM) curve: converged specifications only (failed rows are counted
+# in the caption and kept in the results), the focal parameter on a pseudo-log
+# scale (linear near zero, so intervals that cross zero are drawn in full),
+# filled markers where the J test does not reject at 5%, crosses at a parameter
+# bound, the J-test p-value for each specification, and the choices.
+gmm_curve <- function(run, path, width, height, heights, base_size = 8, j_level = 0.05) {
+  manifest <- run$manifest
+  ok <- run$results[run$results$status == "ok", , drop = FALSE]
+  results <- order_results(manifest, ok)
+  roles <- c("Published specification", "Reported in article", "Other specification")
+  results$role <- factor(ifelse(results$preferred, roles[1L], ifelse(results$original, roles[2L], roles[3L])), levels = roles)
+  colours <- stats::setNames(c("#eb6834", "#2a78d6", "#5f5e5a"), roles)
+  shapes <- stats::setNames(c(23, 24, 21), roles)
+  tested <- is.finite(results$j_p_value)
+  results$fill <- ifelse(tested & results$j_p_value >= j_level, colours[as.character(results$role)],
+                         ifelse(tested, "white", "grey85"))
+  results$size <- 1.1 * c(2.6, 1.8, 1)[as.integer(results$role)]
+  results <- results[order(-as.integer(results$role)), ]
+  base_theme <- ggplot2::theme_minimal(base_size = base_size) +
+    ggplot2::theme(panel.grid.minor = ggplot2::element_blank(), panel.grid.major.x = ggplot2::element_blank(),
+                   axis.text.x = ggplot2::element_blank(), axis.ticks.x = ggplot2::element_blank(),
+                   axis.text = ggplot2::element_text(size = base_size * 0.85, colour = "grey20"),
+                   plot.margin = ggplot2::margin(2, 4, 2, 2))
+  bounds <- results[nzchar(results$bound_hits), , drop = FALSE]
+  top <- ggplot2::ggplot(results, ggplot2::aes(rank, estimate)) +
+    ggplot2::geom_hline(yintercept = 0, colour = "grey45", linewidth = 0.3) +
+    ggplot2::geom_linerange(ggplot2::aes(ymin = ci_lower, ymax = ci_upper), colour = "grey85", linewidth = 0.2) +
+    ggplot2::geom_hline(yintercept = results$estimate[results$preferred], colour = colours[[1L]], linewidth = 0.4,
+                        linetype = "22") +
+    ggplot2::geom_point(ggplot2::aes(shape = role, colour = role, fill = I(fill), size = I(size)), stroke = 0.4) +
+    ggplot2::geom_point(data = bounds, ggplot2::aes(rank, estimate), shape = 4, size = 1.2, colour = "black",
+                        stroke = 0.35, inherit.aes = FALSE) +
+    ggplot2::scale_y_continuous(transform = scales::transform_pseudo_log(sigma = 0.5, base = 10),
+                                breaks = c(-300, -30, -3, 0, 1, 3, 10, 30, 100, 300)) +
+    ggplot2::scale_colour_manual(values = colours, name = "Filled: J test does not reject at 5% (grey: no J test); x: at a bound",
+                                 drop = TRUE) +
+    ggplot2::scale_shape_manual(values = shapes, name = "Filled: J test does not reject at 5% (grey: no J test); x: at a bound",
+                                drop = TRUE) +
+    ggplot2::labs(x = NULL, y = quote(atop("Risk aversion" ~ gamma, "(pseudo-log scale)"))) +
+    ggplot2::guides(colour = ggplot2::guide_legend(nrow = 1L, override.aes = list(fill = unname(colours), size = c(3, 2.6, 2))),
+                    shape = ggplot2::guide_legend(nrow = 1L)) +
+    base_theme + ggplot2::theme(legend.position = "top", legend.justification = "left", legend.location = "plot",
+                                legend.title.position = "top", legend.margin = ggplot2::margin(0, 0, 0, 0),
+                                legend.title = ggplot2::element_text(size = base_size * 0.85, colour = "grey30"),
+                                legend.text = ggplot2::element_text(size = base_size * 0.9))
+  j_panel <- ggplot2::ggplot(results[tested, ], ggplot2::aes(rank, pmax(j_p_value, 1e-16))) +
+    ggplot2::geom_hline(yintercept = j_level, colour = "grey45", linewidth = 0.35, linetype = "22") +
+    ggplot2::geom_point(ggplot2::aes(colour = role), size = 0.55, show.legend = FALSE) +
+    ggplot2::scale_colour_manual(values = colours) +
+    ggplot2::scale_y_log10(limits = c(1e-16, 1), breaks = c(1e-15, 1e-10, 1e-5, 1), labels = c("1e-15", "1e-10", "1e-5", "1")) +
+    ggplot2::scale_x_continuous(limits = range(results$rank)) +
+    ggplot2::labs(x = NULL, y = sprintf("J-test p-value\n(dashed: %g)", j_level)) + base_theme
+  choices <- choice_panel_data(manifest, results)
+  bottom <- ggplot2::ggplot(choices, ggplot2::aes(rank, option)) +
+    ggplot2::geom_point(data = choices[!choices$chosen, ], colour = "grey92", size = 0.5) +
+    ggplot2::geom_point(data = choices[choices$chosen, ], colour = "#1f2a33", size = 0.55) +
+    ggplot2::facet_grid(dimension ~ ., scales = "free", space = "free_y") +
+    ggplot2::labs(x = "Converged specifications ranked by estimate", y = NULL) +
+    base_theme + ggplot2::theme(strip.text.y = ggplot2::element_text(angle = 0, face = "bold", hjust = 0, size = base_size * 0.85),
+                                panel.grid.major.y = ggplot2::element_line(colour = "grey96"))
+  figure <- patchwork::wrap_plots(list(top, j_panel, bottom), ncol = 1L, heights = heights)
+  save_figure(figure, path, width, height)
+  invisible(results)
+}
+
 application_paths <- function(root, estimates, id) {
   apps <- jsonlite::read_json(file.path(root, "paper/config/applications.json"))$applications
   app <- Filter(function(a) identical(a$id, id), apps)[[1L]]
@@ -194,4 +259,6 @@ publication_curve(cfr, c("Capital outlays per pupil", "Total expenditure per pup
 bandwidth_plot(cfr, file.path(out, "Figure_S4"), width = 6.5, height = 6.2, base_size = 8.5)
 publication_curve(bp, "Rural branches per capita", file.path(out, "Figure_S5"), width = 6.5, height = 8.6,
                   heights = c(1.1, 0.45, 2.4), base_size = 8, first_stage = TRUE)
+yogo <- load_application("yogo2006")
+gmm_curve(yogo, file.path(out, "Figure_S6"), width = 6.5, height = 8.6, heights = c(1.2, 0.45, 2.6))
 cat("Figures written to", normalizePath(out), "\n")

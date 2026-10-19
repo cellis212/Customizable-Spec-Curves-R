@@ -11,8 +11,8 @@
     "schema_version": {"const": 2},
     "version": {"type": "string", "minLength": 1, "description": "Menu version. Any change after freezing requires a new version."},
     "analysis_kind": {"enum": ["synthetic_demo", "application"]},
-    "estimator": {"enum": ["linear_fixed_effects", "iv_fixed_effects", "time_series_mean"],
-                  "description": "iv_fixed_effects: two-stage least squares with fixed effects; treatment is the endogenous regressor and every row reports the Montiel Olea-Pflueger effective first-stage F."},
+    "estimator": {"enum": ["linear_fixed_effects", "iv_fixed_effects", "time_series_mean", "gmm"],
+                  "description": "iv_fixed_effects: two-stage least squares with fixed effects; treatment is the endogenous regressor and every row reports the Montiel Olea-Pflueger effective first-stage F. gmm: generalized method of moments on one time series with application-supplied moment functions (base.moments); the focal parameter is the reported estimate and every row reports the J statistic, convergence code, bound hits and dispersion across starts."},
     "title": {"type": "string", "minLength": 1},
     "estimand": {"type": "string", "minLength": 1, "description": "The economic question and units held fixed across the grid."},
     "estimate_label": {"type": "string", "description": "Axis label for the estimate, in economic units."},
@@ -40,6 +40,7 @@
       "description": "Required for applications: the published estimate the preferred specification must reproduce."
     },
     "allow_duplicate_models": {"type": "boolean"},
+    "allow_failed_rows": {"type": "boolean", "description": "Failed specifications (e.g. GMM non-convergence) are results to report, not a fatal error; the preferred specification must still succeed."},
     "joint_inference": {"const": "not_implemented"},
     "figure": {"type": "object", "properties": {"width": {"type": "number"}, "height": {"type": "number"}}},
     "notes": {"type": "string"},
@@ -52,9 +53,12 @@
       "type": "object",
       "required": ["type"],
       "properties": {
-        "type": {"enum": ["cluster", "iid", "hetero", "newey_west"]},
+        "type": {"enum": ["cluster", "iid", "hetero", "newey_west", "varhac"],
+                 "description": "For gmm: newey_west (Bartlett kernel) or varhac (den Haan-Levin), both of uncentered moments."},
         "cluster": {"$ref": "#/$defs/variable"},
-        "lags": {"type": "integer", "minimum": 0}
+        "lags": {"type": "integer", "minimum": 0},
+        "max_lag": {"type": "integer", "minimum": 0, "description": "VARHAC maximum lag order."},
+        "criterion": {"enum": ["aic", "bic"], "description": "VARHAC lag-order criterion."}
       },
       "additionalProperties": false
     },
@@ -68,9 +72,22 @@
       },
       "additionalProperties": false
     },
+    "parameter_vector": {"type": "object", "additionalProperties": {"type": "number"},
+                         "description": "A value for every GMM parameter, by name."},
+    "search": {
+      "type": "object",
+      "required": ["type"],
+      "properties": {
+        "type": {"enum": ["published", "local", "multistart"],
+                 "description": "published: first_step is the preliminary estimate and later steps are searched locally from it; local: one local search from start; multistart: start plus `starts` Halton points over the bounds in every step."},
+        "starts": {"type": "integer", "minimum": 1}
+      },
+      "additionalProperties": false
+    },
     "base": {
       "type": "object",
-      "required": ["outcome", "vcov"],
+      "required": ["vcov"],
+      "description": "Regression estimators need outcome (and, except for time-series means, treatment); gmm needs moments, parameters, focal_parameter, weighting, search and start.",
       "properties": {
         "outcome": {"$ref": "#/$defs/variable"},
         "treatment": {"$ref": "#/$defs/variable"},
@@ -80,7 +97,20 @@
         "fixed_effects": {"$ref": "#/$defs/variables"},
         "unit_trend": {"type": "boolean"},
         "vcov": {"$ref": "#/$defs/vcov"},
-        "filters": {"type": "array", "items": {"$ref": "#/$defs/filter"}}
+        "filters": {"type": "array", "items": {"$ref": "#/$defs/filter"}},
+        "moments": {"type": "object", "required": ["name", "r", "python"],
+                    "properties": {"name": {"type": "string"}, "r": {"type": "string"}, "python": {"type": "string"}},
+                    "additionalProperties": false,
+                    "description": "The moment model's name and its R and Python files (relative to the repository root); both are pinned in the frozen manifest."},
+        "parameters": {"type": "array", "minItems": 1, "items": {"type": "object", "required": ["name", "lower", "upper"],
+                       "properties": {"name": {"type": "string"}, "lower": {"type": "number"}, "upper": {"type": "number"},
+                                      "label": {"type": "string"}}, "additionalProperties": false}},
+        "focal_parameter": {"type": "string"},
+        "moment_options": {"type": "object", "description": "Options passed to the moment functions; dimensions may add or change keys."},
+        "weighting": {"enum": ["identity", "two_step", "iterated", "cue"]},
+        "search": {"$ref": "#/$defs/search"},
+        "start": {"$ref": "#/$defs/parameter_vector"},
+        "first_step": {"$ref": "#/$defs/parameter_vector"}
       },
       "additionalProperties": false
     },
@@ -99,7 +129,12 @@
         "fixed_effects": {"$ref": "#/$defs/variables"},
         "unit_trend": {"type": "boolean"},
         "vcov": {"$ref": "#/$defs/vcov"},
-        "filters": {"type": "array", "items": {"$ref": "#/$defs/filter"}}
+        "filters": {"type": "array", "items": {"$ref": "#/$defs/filter"}},
+        "moment_options": {"type": "object"},
+        "weighting": {"enum": ["identity", "two_step", "iterated", "cue"]},
+        "search": {"$ref": "#/$defs/search"},
+        "start": {"$ref": "#/$defs/parameter_vector"},
+        "first_step": {"$ref": "#/$defs/parameter_vector"}
       },
       "additionalProperties": false
     },

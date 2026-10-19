@@ -9,5 +9,8 @@ Audit [RUN_DIR] without changing anything.
 - Check that common-sample rows share a sample_hash within each filter set.
 - Open the figure and check labels, units, the baseline marker, and the original-paper
   markers.
+- For gmm rows, tabulate failure reasons and convergence codes by option, estimates at a
+  parameter bound, J-test rejections, and start_share_best for multistart rows; say which
+  options fail most and whether failed rows cluster in one part of the menu.
 Return a list of problems (or "none found") with evidence for each.
 ```

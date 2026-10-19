@@ -2,6 +2,7 @@
 args <- commandArgs(trailingOnly = TRUE)
 script <- sub("^--file=", "", commandArgs()[grepl("^--file=", commandArgs())][1L])
 root <- normalizePath(file.path(dirname(script), ".."), mustWork = TRUE)
+options(speccurve.root = root)  # GMM menus name moment files relative to the repository root
 command <- if (length(args)) args[1L] else "check"
 packages <- c("digest", "fixest", "ggplot2", "jsonlite", "patchwork", "renv", "yaml")
 

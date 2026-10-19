@@ -1,0 +1,430 @@
+{
+  "schema_version": 2,
+  "version": "yogo-v1",
+  "analysis_kind": "application",
+  "estimator": "gmm",
+  "title": "Durable consumption and expected stock returns: Yogo (2006)",
+  "estimand": "Relative risk aversion gamma in Yogo's durable-consumption model with Epstein-Zin utility, estimated by GMM from the Euler equations of the test assets, the 3-month T-bill and the intratemporal first-order condition (quarterly, 1951-2001).",
+  "estimate_label": "Relative risk aversion (gamma)",
+  "row_id": "row_id",
+  "unit": "series",
+  "time": "time",
+  "base": {
+    "moments": {
+      "name": "yogo_durable",
+      "r": "paper/applications/yogo2006/moments.R",
+      "python": "paper/applications/yogo2006/moments.py"
+    },
+    "parameters": [
+      {
+        "name": "sigma",
+        "lower": 1e-05,
+        "upper": 2,
+        "label": "Elasticity of intertemporal substitution"
+      },
+      {
+        "name": "gamma",
+        "lower": 1e-05,
+        "upper": 300,
+        "label": "Relative risk aversion"
+      },
+      {
+        "name": "rho",
+        "lower": 1e-05,
+        "upper": 2,
+        "label": "Elasticity of substitution between nondurables and durables"
+      },
+      {
+        "name": "alpha",
+        "lower": 1e-05,
+        "upper": 1,
+        "label": "Utility weight on durables"
+      },
+      {
+        "name": "beta",
+        "lower": 0.01,
+        "upper": 1,
+        "label": "Discount factor"
+      }
+    ],
+    "focal_parameter": "gamma",
+    "moment_options": {
+      "depreciation": 0.94
+    },
+    "weighting": "two_step",
+    "search": {
+      "type": "published"
+    },
+    "start": {
+      "sigma": 0.0018090567687419402,
+      "gamma": 189.12650272580734,
+      "rho": 0.7895491870294449,
+      "alpha": 0.9071106233091514,
+      "beta": 0.92
+    },
+    "first_step": {
+      "sigma": 0.024326784452834555,
+      "gamma": 189.12651583640482,
+      "rho": 0.5214946075612824,
+      "alpha": 0.8266459639206094,
+      "beta": 0.8728160765267178
+    },
+    "vcov": {
+      "type": "varhac",
+      "max_lag": 1,
+      "criterion": "aic"
+    }
+  },
+  "confidence_level": 0.95,
+  "sample_modes": [
+    "available"
+  ],
+  "dimensions": [
+    {
+      "name": "test_assets",
+      "label": "Test assets",
+      "options": [
+        {
+          "id": "ff25",
+          "label": "25 size-BE/ME portfolios",
+          "moment_options": {
+            "assets": "ff25"
+          },
+          "start": {
+            "sigma": 0.0018090567687419402,
+            "gamma": 189.12650272580734,
+            "rho": 0.7895491870294449,
+            "alpha": 0.9071106233091514,
+            "beta": 0.92
+          },
+          "first_step": {
+            "sigma": 0.024326784452834555,
+            "gamma": 189.12651583640482,
+            "rho": 0.5214946075612824,
+            "alpha": 0.8266459639206094,
+            "beta": 0.8728160765267178
+          },
+          "justification": "Yogo Table II column 1 (baseline). Starting values as in nlest_dur.prg: linear-model sigma, gamma and alpha, rho from the cointegration regression, beta = 0.92; first step as saved in results/FF/nlest_dur.fmt (GAUSS return code 3, Borri and Ragusa 2017)."
+        },
+        {
+          "id": "ind24",
+          "label": "24 industry-by-BE/ME portfolios",
+          "moment_options": {
+            "assets": "ind24"
+          },
+          "start": {
+            "sigma": 0.023986354487330008,
+            "gamma": 191.43825224349374,
+            "rho": 0.5199373981071218,
+            "alpha": 0.826844197684276,
+            "beta": 0.9001785302517282
+          },
+          "first_step": {
+            "sigma": 0.023986354487330008,
+            "gamma": 191.43825224349374,
+            "rho": 0.5199373981071218,
+            "alpha": 0.826844197684276,
+            "beta": 0.9001785302517282
+          },
+          "justification": "Yogo Table II column 2. Yogo's code starts this set from the saved 25-portfolio second-step estimate; its saved first-step vector equals that start (the GAUSS first step never moved)."
+        },
+        {
+          "id": "bet25",
+          "label": "25 market- and HML-beta portfolios",
+          "moment_options": {
+            "assets": "bet25"
+          },
+          "start": {
+            "sigma": 0.023986354487330008,
+            "gamma": 191.43825224349374,
+            "rho": 0.5199373981071218,
+            "alpha": 0.826844197684276,
+            "beta": 0.9001785302517282
+          },
+          "first_step": {
+            "sigma": 0.023986354487330008,
+            "gamma": 191.43825224349374,
+            "rho": 0.5199373981071218,
+            "alpha": 0.826844197684276,
+            "beta": 0.9001785302517282
+          },
+          "justification": "Yogo Table II column 3. Yogo's code starts this set from the saved 25-portfolio second-step estimate; its saved first-step vector equals that start (the GAUSS first step never moved)."
+        },
+        {
+          "id": "all74",
+          "label": "All 74 portfolios",
+          "moment_options": {
+            "assets": "all74"
+          },
+          "start": {
+            "sigma": 0.023986354487330008,
+            "gamma": 191.43825224349374,
+            "rho": 0.5199373981071218,
+            "alpha": 0.826844197684276,
+            "beta": 0.9001785302517282
+          },
+          "first_step": {
+            "sigma": 0.023986354487330008,
+            "gamma": 191.43825224349374,
+            "rho": 0.5199373981071218,
+            "alpha": 0.826844197684276,
+            "beta": 0.9001785302517282
+          },
+          "justification": "Yogo Table II column 4. Yogo's code starts this set from the saved 25-portfolio second-step estimate; its saved first-step vector equals that start (the GAUSS first step never moved)."
+        }
+      ]
+    },
+    {
+      "name": "moment_blocks",
+      "label": "Moment blocks",
+      "options": [
+        {
+          "id": "all",
+          "label": "T-bill, test assets and FOC",
+          "moment_options": {
+            "tbill": true,
+            "foc": true
+          },
+          "justification": "Yogo: Euler equations for the T-bill and the test assets, and the intratemporal FOC."
+        },
+        {
+          "id": "no_tbill",
+          "label": "Without the T-bill equation",
+          "moment_options": {
+            "tbill": false,
+            "foc": true
+          },
+          "justification": "Borri and Ragusa (2017): the T-bill moment carries the rejection, and Yogo's second-step weighting gave it about 1/10,000 of the weight of the others. The FOC still pins the scale of the SDF."
+        },
+        {
+          "id": "no_foc",
+          "label": "Without the FOC",
+          "moment_options": {
+            "tbill": true,
+            "foc": false
+          },
+          "justification": "Pakos (2004) does not impose the intratemporal FOC (Yogo's appendix). Dropping both the T-bill equation and the FOC is not an option: excess-return moments do not identify beta."
+        }
+      ]
+    },
+    {
+      "name": "weighting",
+      "label": "Weighting",
+      "options": [
+        {
+          "id": "two_step",
+          "label": "Two-step",
+          "weighting": "two_step",
+          "justification": "Yogo: identity first step, then the inverse long-run covariance at the first-step vector (Hansen 1982)."
+        },
+        {
+          "id": "identity",
+          "label": "Identity (one step)",
+          "weighting": "identity",
+          "justification": "A fixed, prespecified weighting (Cochrane 2005); standard errors are the sandwich form and no J test is reported."
+        },
+        {
+          "id": "iterated",
+          "label": "Iterated",
+          "weighting": "iterated",
+          "justification": "Weighting re-estimated to convergence (Hansen, Heaton and Yaron 1996)."
+        },
+        {
+          "id": "cue",
+          "label": "Continuously updated",
+          "weighting": "cue",
+          "justification": "Weighting re-estimated at every parameter value (Hansen, Heaton and Yaron 1996)."
+        }
+      ]
+    },
+    {
+      "name": "search",
+      "label": "Starting values and search",
+      "options": [
+        {
+          "id": "published",
+          "label": "As published (GAUSS first step)",
+          "search": {
+            "type": "published"
+          },
+          "justification": "Yogo's code path: the saved GAUSS first-step vector serves as the preliminary estimate and later steps are searched locally from it."
+        },
+        {
+          "id": "local",
+          "label": "One local search from Yogo's start",
+          "search": {
+            "type": "local"
+          },
+          "justification": "Each step solved by one local search from Yogo's starting values (later steps from the previous step's estimate)."
+        },
+        {
+          "id": "multistart",
+          "label": "Multistart (21 starts)",
+          "search": {
+            "type": "multistart",
+            "starts": 20
+          },
+          "justification": "Borri and Ragusa (2017): the objective has several local modes. Yogo's start plus 20 Halton points over the bounds in every step; lowest converged objective kept."
+        }
+      ]
+    },
+    {
+      "name": "hac",
+      "label": "Long-run covariance",
+      "options": [
+        {
+          "id": "varhac",
+          "label": "VARHAC(1), AIC",
+          "vcov": {
+            "type": "varhac",
+            "max_lag": 1,
+            "criterion": "aic"
+          },
+          "justification": "Yogo (den Haan and Levin 1997): one lag allows for time aggregation in consumption (Hall 1988)."
+        },
+        {
+          "id": "newey_west",
+          "label": "Newey-West, 4 lags",
+          "vcov": {
+            "type": "newey_west",
+            "lags": 4
+          },
+          "justification": "Kernel alternative; 4 lags is the Newey and West (1994) rule floor(4 (T/100)^(2/9)) for T of about 200."
+        },
+        {
+          "id": "none",
+          "label": "No autocorrelation correction",
+          "vcov": {
+            "type": "newey_west",
+            "lags": 0
+          },
+          "justification": "Euler-equation errors for one-period returns are a martingale difference sequence under the null (Hansen and Singleton 1982)."
+        }
+      ]
+    },
+    {
+      "name": "timing",
+      "label": "Consumption timing",
+      "options": [
+        {
+          "id": "beginning",
+          "label": "Beginning of period",
+          "moment_options": {
+            "timing": "b"
+          },
+          "justification": "Yogo, following Campbell (2003): each quarter's consumption is the flow on its first day, so the return over quarter q is paired with consumption growth and inflation from q to q+1."
+        },
+        {
+          "id": "end",
+          "label": "End of period",
+          "moment_options": {
+            "timing": "e"
+          },
+          "justification": "The other convention discussed by Campbell (2003): the return over quarter q is paired with consumption growth and inflation over quarter q (consumption-side series lagged one quarter)."
+        }
+      ]
+    },
+    {
+      "name": "sample",
+      "label": "Sample",
+      "options": [
+        {
+          "id": "full",
+          "label": "1951:1-2001:4",
+          "justification": "Yogo, following Ogaki and Reinhart (1998): post-war restocking of durables before 1951."
+        },
+        {
+          "id": "post1963",
+          "label": "1963:3-2001:4",
+          "filters": [
+            {
+              "variable": "time",
+              "op": ">=",
+              "value": 1963.5
+            }
+          ],
+          "justification": "The standard sample for book-to-market-sorted portfolios (Fama and French 1993; Lettau and Ludvigson 2001)."
+        }
+      ]
+    }
+  ],
+  "exclusions": [
+    {
+      "match": {
+        "weighting": [
+          "identity"
+        ],
+        "search": [
+          "published"
+        ]
+      },
+      "reason": "The published first-step vector is where GAUSS stopped, not an identity-weighted minimizer, so no estimator is defined."
+    },
+    {
+      "match": {
+        "weighting": [
+          "cue"
+        ],
+        "hac": [
+          "varhac"
+        ]
+      },
+      "reason": "Re-selecting VARHAC lag orders at every parameter value makes the CUE objective discontinuous."
+    }
+  ],
+  "allow_failed_rows": true,
+  "preferred": {
+    "test_assets": "ff25",
+    "moment_blocks": "all",
+    "weighting": "two_step",
+    "search": "published",
+    "hac": "varhac",
+    "timing": "beginning",
+    "sample": "full",
+    "sample_mode": "available"
+  },
+  "original_specifications": [
+    {
+      "test_assets": "ind24",
+      "moment_blocks": "all",
+      "weighting": "two_step",
+      "search": "published",
+      "hac": "varhac",
+      "timing": "beginning",
+      "sample": "full",
+      "sample_mode": "available"
+    },
+    {
+      "test_assets": "bet25",
+      "moment_blocks": "all",
+      "weighting": "two_step",
+      "search": "published",
+      "hac": "varhac",
+      "timing": "beginning",
+      "sample": "full",
+      "sample_mode": "available"
+    },
+    {
+      "test_assets": "all74",
+      "moment_blocks": "all",
+      "weighting": "two_step",
+      "search": "published",
+      "hac": "varhac",
+      "timing": "beginning",
+      "sample": "full",
+      "sample_mode": "available"
+    }
+  ],
+  "reference": {
+    "estimate": 191.438,
+    "std_error": 49.868,
+    "tolerance": 0.05,
+    "source": "Yogo (2006, JF 61(2)) Table II column 1 (25 Fama-French portfolios): gamma 191.438 (49.868). Rebuilt from the first-step vector saved in Yogo's results/FF/nlest_dur.fmt, as agreed with the author on 2026-10-18 (two-part gate in notes/application-selection.md)."
+  },
+  "joint_inference": "not_implemented",
+  "figure": {
+    "width": 7.2,
+    "height": 7.4
+  },
+  "notes": "Two-part reproduction gate: (1) at Yogo's saved second-step vectors the moments and VARHAC reproduce Table II J statistics and standard errors (check_published.R); (2) the preferred row reproduces gamma. Local search: projected Levenberg-Marquardt on whitened moments, identical in R and Python."
+}

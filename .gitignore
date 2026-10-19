@@ -34,6 +34,9 @@
 !/paper/applications/*/README.md
 !/paper/applications/*/build_input.R
 !/paper/applications/*/menu.json
+!/paper/applications/*/moments.R
+!/paper/applications/*/moments.py
+!/paper/applications/*/check_published.R
 !/paper/figures/
 /paper/figures/*
 !/paper/figures/*.R

@@ -1,6 +1,7 @@
 args <- commandArgs()
 script <- sub("^--file=", "", args[grepl("^--file=", args)][1L])
 root <- normalizePath(file.path(dirname(script), "../.."))
+options(speccurve.root = root)  # GMM menus name moment files relative to the repository root
 if (dir.exists(file.path(root, "renv/library")) && requireNamespace("renv", quietly = TRUE))
   renv::load(project = root, quiet = TRUE)
 for (file in c("curve.R", "demo.R", "plot.R")) source(file.path(root, "paper/R", file))
@@ -237,6 +238,130 @@ expect_error(validate_menu(ols_with_z, ivd), "only used by iv_fixed_effects")
 negative <- ivd
 negative$w[3L] <- -1
 expect_error(validate_menu(iv_menu, negative), "positive")
+
+# Generalized method of moments with an application-supplied moment function.
+# Deterministic data (no random numbers) so the Python tests use the same values.
+tt <- seq_len(200)
+gmm_data <- data.frame(row_id = tt, series = "s", time = tt, z1 = sin(0.37 * tt), z2 = cos(1.13 * tt))
+gmm_u <- 0.5 * sin(2.71 * tt + 0.5)
+gmm_data$x <- 1 + 0.8 * gmm_data$z1 + 0.5 * gmm_data$z2 + 0.5 * gmm_u + 0.3 * cos(0.91 * tt)
+gmm_data$y <- 0.5 + 2 * gmm_data$x + gmm_u
+gmm_menu <- list(schema_version = 2L, version = "gmm-test", analysis_kind = "synthetic_demo", estimator = "gmm",
+  title = "GMM test", estimand = "Slope b in E[z (y - a - b x)] = 0", row_id = "row_id", unit = "series", time = "time",
+  base = list(moments = list(name = "linear_iv", r = "paper/tests/gmm_linear_moments.R",
+                             python = "python/tests/gmm_linear_moments.py"),
+              parameters = list(list(name = "a", lower = -10, upper = 10), list(name = "b", lower = -10, upper = 10)),
+              focal_parameter = "b", moment_options = list(instruments = "both"), weighting = "two_step",
+              search = list(type = "local"), start = list(a = 0, b = 0), vcov = list(type = "newey_west", lags = 0L)),
+  confidence_level = 0.95,
+  dimensions = list(
+    list(name = "weighting", label = "Weighting", options = list(
+      list(id = "two_step", label = "Two-step", weighting = "two_step"),
+      list(id = "identity", label = "Identity", weighting = "identity"),
+      list(id = "iterated", label = "Iterated", weighting = "iterated"),
+      list(id = "cue", label = "CUE", weighting = "cue"))),
+    list(name = "search", label = "Search", options = list(
+      list(id = "local", label = "Local", search = list(type = "local")),
+      list(id = "multi", label = "Multistart", search = list(type = "multistart", starts = 3L)))),
+    list(name = "z", label = "Instruments", options = list(
+      list(id = "both", label = "z1 and z2"),
+      list(id = "z1", label = "z1 only", moment_options = list(instruments = "z1")))),
+    list(name = "hac", label = "Long-run covariance", options = list(
+      list(id = "nw0", label = "None", vcov = list(type = "newey_west", lags = 0L)),
+      list(id = "varhac", label = "VARHAC", vcov = list(type = "varhac", max_lag = 1L, criterion = "aic"))))),
+  exclusions = list(list(match = list(weighting = list("cue"), hac = list("varhac")), reason = "CUE with VARHAC is not supported.")),
+  sample_modes = list("available"),
+  preferred = list(weighting = "two_step", search = "local", z = "both", hac = "nw0", sample_mode = "available"))
+gmm_manifest <- freeze_manifest(gmm_menu, gmm_data, root, file.path(directory, "gmm.json"))
+check(all(c("paper/tests/gmm_linear_moments.R", "python/tests/gmm_linear_moments.py") %in% names(gmm_manifest$source_hashes)),
+      "GMM manifests must pin the application's moment files.")
+gmm_results <- run_manifest(gmm_manifest, gmm_data)
+check(validate_results(gmm_manifest, gmm_results)$passed && nrow(gmm_results) == 28L, "GMM grid should complete.")
+check(all(gmm_row_fields(gmm_menu) %in% names(gmm_results)) && all(gmm_results$convergence == 0),
+      "GMM rows must carry their diagnostics.")
+X <- cbind(1, gmm_data$x)
+Z <- cbind(1, gmm_data$z1, gmm_data$z2)
+n <- nrow(gmm_data)
+linear_gmm <- function(W) drop(solve(t(X) %*% Z %*% W %*% t(Z) %*% X, t(X) %*% Z %*% W %*% t(Z) %*% gmm_data$y))
+theta1 <- linear_gmm(diag(3))
+e1 <- drop(gmm_data$y - X %*% theta1)
+S1 <- crossprod(e1 * Z) / n
+theta2 <- linear_gmm(solve(S1))
+e2 <- drop(gmm_data$y - X %*% theta2)
+S2 <- crossprod(e2 * Z) / n
+G <- -crossprod(Z, X) / n
+gbar2 <- colMeans(e2 * Z)
+pick <- function(...) { keep <- rep(TRUE, nrow(gmm_results)); a <- list(...)
+  for (k in names(a)) keep <- keep & gmm_results[[k]] == a[[k]]; gmm_results[keep, ] }
+row_id <- pick(weighting = "identity", search = "local", z = "both", hac = "nw0")
+row_2s <- pick(weighting = "two_step", search = "local", z = "both", hac = "nw0")
+check(abs(row_id$estimate - theta1[2L]) < 1e-8 && abs(row_id$theta_a - theta1[1L]) < 1e-8 && is.na(row_id$j_stat),
+      "Identity-weighted GMM must match the closed form and report no J test.")
+bread <- solve(crossprod(G))
+check(abs(row_id$std_error - sqrt((bread %*% t(G) %*% S1 %*% G %*% bread / n)[2L, 2L])) < 1e-7,
+      "Identity-weighted GMM must use the sandwich covariance.")
+check(abs(row_2s$estimate - theta2[2L]) < 1e-8, "Two-step GMM must match the closed form.")
+check(abs(row_2s$std_error - sqrt(solve(t(G) %*% solve(S2, G))[2L, 2L] / n)) < 1e-7,
+      "Two-step standard errors must use the covariance at the second-step estimate.")
+check(abs(row_2s$j_stat - n * drop(t(gbar2) %*% solve(S2, gbar2))) < 1e-7 && row_2s$j_df == 1L &&
+        abs(row_2s$j_p_value - stats::pchisq(row_2s$j_stat, 1, lower.tail = FALSE)) < 1e-12,
+      "The J statistic must use the covariance at the second-step estimate.")
+row_multi <- pick(weighting = "two_step", search = "multi", z = "both", hac = "nw0")
+check(abs(row_multi$estimate - theta2[2L]) < 1e-8 && row_multi$n_starts == 5L && row_multi$start_share_best == 1 &&
+        row_multi$start_focal_range < 1e-6, "Multistart must try the previous estimate, the start and the Halton points.")
+row_it <- pick(weighting = "iterated", search = "local", z = "both", hac = "nw0")
+# The CUE objective is multimodal: from (0, 0) a single local search stops at a
+# distant mode, while multistart finds the one below the two-step J statistic.
+row_cue <- pick(weighting = "cue", search = "multi", z = "both", hac = "nw0")
+row_cue_local <- pick(weighting = "cue", search = "local", z = "both", hac = "nw0")
+check(row_it$weighting_updates >= 2L && row_cue$j_stat <= row_2s$j_stat + 1e-9 && row_cue_local$j_stat > row_cue$j_stat,
+      "Iterated GMM must update the weighting, and multistart CUE must not exceed the two-step J statistic.")
+just <- pick(weighting = "two_step", search = "local", z = "z1", hac = "nw0")
+check(just$j_df == 0L && is.na(just$j_p_value) && just$j_stat < 1e-12,
+      "Exactly identified GMM has no overidentification test.")
+check(all(grepl("^linear_iv\\(instruments=", gmm_results$formula)) && all(gmm_results$treatment == "b"),
+      "GMM formulas name the moment model, its options and the focal parameter.")
+check(identical(unique(gmm_results$vcov[gmm_results$hac == "varhac"]), "VARHAC(1, AIC)"), "VARHAC must be labelled.")
+check(isTRUE(all.equal(halton_point(1, 3), c(0.5, 1 / 3, 0.2))) && isTRUE(all.equal(halton_point(5, 2), c(0.625, 7 / 9))),
+      "Halton points must follow the radical-inverse definition.")
+check(isTRUE(all.equal(gmm_varhac(cbind(gmm_u), 0L, "aic"), crossprod(cbind(gmm_u)) / n)), "VARHAC(0) is the uncentered second moment.")
+ar <- matrix(as.numeric(stats::filter(gmm_u, 0.6, method = "recursive")), ncol = 1L)
+a_hat <- sum(ar[-1L] * ar[-n]) / sum(ar[-n]^2)
+check(abs(gmm_varhac(ar, 1L, "aic")[1L, 1L] - mean((ar[-1L] - a_hat * ar[-n])^2) / (1 - a_hat)^2) < 1e-12,
+      "VARHAC(1) for one AR(1) series must equal sigma^2 / (1 - a)^2.")
+# Infeasible starts, bounds and unsupported combinations.
+broken <- gmm_menu
+broken$base$moment_options$broken <- TRUE
+broken$dimensions <- broken$dimensions[1L]
+broken$exclusions <- NULL
+broken$preferred <- list(weighting = "two_step", sample_mode = "available")
+broken_manifest <- freeze_manifest(broken, gmm_data, root, file.path(directory, "gmm-broken.json"))
+broken_results <- run_manifest(broken_manifest, gmm_data)
+check(nrow(broken_results) == 4L && all(broken_results$status == "failed") &&
+        all(grepl("objective not finite at the start", broken_results$error)) && all(broken_results$convergence == 3),
+      "Rows whose objective is not finite must be kept as failures with their reason and code.")
+check(!validate_results(broken_manifest, broken_results)$passed, "Failed rows are fatal unless the menu allows them.")
+broken_manifest$menu$allow_failed_rows <- TRUE
+expect_error(validate_results(broken_manifest, broken_results), "preferred specification failed")
+bounded <- gmm_menu
+bounded$base$parameters[[2L]]$upper <- 1.5
+bounded$dimensions <- bounded$dimensions[1L]
+bounded$exclusions <- NULL
+bounded$preferred <- list(weighting = "two_step", sample_mode = "available")
+bounded_results <- run_manifest(freeze_manifest(bounded, gmm_data, root, file.path(directory, "gmm-bounded.json")), gmm_data)
+check(all(bounded_results$status == "ok") && all(bounded_results$bound_hits == "b") && all(abs(bounded_results$estimate - 1.5) < 1e-12),
+      "Estimates at a bound must be reported with the bound hit.")
+unexcluded <- gmm_menu
+unexcluded$exclusions <- NULL
+expect_error(validate_menu(unexcluded, gmm_data), "CUE with VARHAC")
+published <- gmm_menu
+published$dimensions[[2L]]$options[[1L]] <- list(id = "local", label = "Published", search = list(type = "published"))
+published$base$first_step <- list(a = 0.4, b = 2.1)
+expect_error(validate_menu(published, gmm_data), "defines no estimator")
+wrong_names <- gmm_menu
+wrong_names$base$parameters[[1L]]$name <- "intercept"
+expect_error(validate_menu(wrong_names, gmm_data), "must match the moment model")
+expect_error(execution_plan(gmm_manifest, gmm_data), "gmm runs in R and Python only")
 
 # Language-neutral execution plan for Stata.
 plan <- execution_plan(ts_manifest, series)

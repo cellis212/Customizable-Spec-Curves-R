@@ -17,7 +17,9 @@ paths <- function(id) {
 }
 escape <- function(x) {
   x <- gsub("([&%$#_{}])", "\\\\\\1", x)
-  gsub("([0-9]{4})-([0-9]{4})", "\\1--\\2", x)
+  x <- gsub("\\^", "\\\\textasciicircum{}", x)
+  x <- gsub("~", "\\\\textasciitilde{}", x)
+  gsub("([0-9]{4}(:[0-9])?)-([0-9]{4})", "\\1--\\3", x)
 }
 read_menu <- function(id) jsonlite::read_json(paths(id)$manifest, simplifyVector = FALSE)$menu
 option_label <- function(menu, dim, id) {
@@ -91,6 +93,30 @@ bll_options_table <- function(path) {
   writeLines(c(lines, sprintf("All & & %s \\\\", paste(all_cells, collapse = " & ")), "\\bottomrule", "\\end{tabular}"), path)
 }
 
+# Structural example: by option, converged rows, the median focal estimate,
+# estimates below 10, and J tests rejecting at 5% among the converged rows.
+gmm_options_table <- function(id, path) {
+  menu <- read_menu(id)
+  x <- utils::read.csv(paths(id)$results, stringsAsFactors = FALSE)
+  cell <- function(g) {
+    ok <- g[g$status == "ok", ]
+    tested <- ok[is.finite(ok$j_p_value), ]
+    sprintf("%d/%d & %s & %d & %s", nrow(ok), nrow(g), if (nrow(ok)) sprintf("$%.2f$", stats::median(ok$estimate)) else "--",
+            sum(ok$estimate < 10), if (nrow(tested)) sprintf("%d/%d", sum(tested$j_p_value < 0.05), nrow(tested)) else "--")
+  }
+  lines <- c("\\footnotesize", "\\begin{tabular}{@{}llrrrr@{}}", "\\toprule",
+             "Decision & Option & Converged & Median $\\hat\\gamma$ & $\\hat\\gamma < 10$ & $J$ rejects (5\\%) \\\\", "\\midrule")
+  for (d in menu$dimensions) {
+    first <- TRUE
+    for (o in d$options) {
+      lines <- c(lines, sprintf("%s & %s & %s \\\\", if (first) escape(d$label) else "", escape(o$label), cell(x[x[[d$name]] == o$id, ])))
+      first <- FALSE
+    }
+    lines <- c(lines, "\\addlinespace")
+  }
+  writeLines(c(lines, sprintf("All & & %s \\\\", cell(x)), "\\bottomrule", "\\end{tabular}"), path)
+}
+
 out <- args[2L]
 menu_table("bll2010", file.path(out, "table_menu_bll.tex"))
 menu_table("cz_am", file.path(out, "table_menu_cz.tex"))
@@ -102,4 +128,6 @@ portfolio_results_table("cz_bliq", file.path(out, "table_results_bliq.tex"))
 menu_table("fi2015", file.path(out, "table_menu_fi.tex"))
 menu_table("cfr2010", file.path(out, "table_menu_cfr.tex"))
 menu_table("bp2005", file.path(out, "table_menu_bp.tex"))
+menu_table("yogo2006", file.path(out, "table_menu_yogo.tex"))
+gmm_options_table("yogo2006", file.path(out, "table_options_yogo.tex"))
 cat("Supplement tables written to", normalizePath(out), "\n")

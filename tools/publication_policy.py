@@ -29,7 +29,8 @@ EXACT_PATHS = {
     "python/pyproject.toml", "stata/speccurve_run.do",
 }
 # Directory patterns: (parent parts, allowed suffixes). Application folders hold
-# only scripts, menus and documentation; data never live in the repository.
+# only scripts, menus and documentation (and, for GMM applications, their moment
+# functions and published-value check); data never live in the repository.
 PATTERN_PATHS = (
     (("paper", "R"), (".R",)),
     (("paper", "tests"), (".R",)),
@@ -38,7 +39,7 @@ PATTERN_PATHS = (
     (("python", "speccurve"), (".py",)),
     (("python", "tests"), (".py",)),
 )
-APPLICATION_FILES = {"README.md", "build_input.R", "menu.json"}
+APPLICATION_FILES = {"README.md", "build_input.R", "menu.json", "moments.R", "moments.py", "check_published.R"}
 PRIVATE_NAMES = {
     "data", "raw", "processed", "notes", "research", "transcripts",
     "conversations", "logs", "output", "outputs", "results", "scratch",

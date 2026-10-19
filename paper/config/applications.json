@@ -66,6 +66,16 @@
       "specifications": 1224,
       "design": "instrumental variables",
       "source": "Burgess and Pande (2005), American Economic Review 95(3); AEA package (openICPSR doi:10.3886/E112313V1)"
+    },
+    {
+      "id": "yogo2006",
+      "manifest_version": "yogo-v1",
+      "raw": "yogo_2006/CBased_Programs.zip",
+      "input": "yogo2006/yogo2006_input.csv",
+      "status": "selected_reproduced_frozen",
+      "specifications": 1440,
+      "design": "structural estimation (GMM)",
+      "source": "Yogo (2006), Journal of Finance 61(2); author's data and GAUSS programs (research page)"
     }
   ]
 }

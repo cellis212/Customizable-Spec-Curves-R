@@ -14,6 +14,7 @@
 #   fi_2015/20121416_data.zip            AEA package for Favara and Imbs (2015)
 #   bp_2005/june05_data_burgess.zip      AEA package for Burgess and Pande (2005)
 #   cfr_2010/recursivepanel.dta.zip      Cellini, Ferreira and Rothstein (2010) archive
+#   yogo_2006/CBased_Programs.zip        Yogo (2006) data and GAUSS programs (author's research page)
 #   (see each paper/applications/<id>/README.md for sources and hashes)
 # WORK_DIR receives processed inputs, frozen manifests, runs, figures, tables, and
 # explorer/specification_explorer.html, a searchable page with every specification.
@@ -29,7 +30,7 @@ processed="$work/data/processed"
 estimates="$work/estimates"
 mkdir -p "$processed/bll_2010" "$processed/cz_am" "$processed/cz_bliq" "$processed/btmr2021" "$estimates/bll2010" \
   "$estimates/cz_am" "$estimates/cz_bliq" "$estimates/btmr2021" "$work/figures" "$work/tables"
-for app in fi2015 cfr2010 bp2005; do mkdir -p "$processed/$app" "$estimates/$app"; done
+for app in fi2015 cfr2010 bp2005 yogo2006; do mkdir -p "$processed/$app" "$estimates/$app"; done
 cd "$root"
 
 bll_input="$processed/bll_2010/bll_input.csv"
@@ -46,6 +47,12 @@ bp_input="$processed/bp2005/bp2005_input.csv"
 [ -f "$fi_input" ] || Rscript paper/applications/fi2015/build_input.R "$raw/fi_2015" "$fi_input"
 [ -f "$cfr_input" ] || Rscript paper/applications/cfr2010/build_input.R "$raw/cfr_2010" "$cfr_input"
 [ -f "$bp_input" ] || Rscript paper/applications/bp2005/build_input.R "$raw/bp_2005" "$bp_input"
+yogo_input="$processed/yogo2006/yogo2006_input.csv"
+[ -f "$yogo_input" ] || Rscript paper/applications/yogo2006/build_input.R "$raw/yogo_2006" "$yogo_input"
+# Structural example, reproduction gate part 1: J statistics and standard errors
+# at Yogo's saved parameter vectors (no optimizer).
+yogo_check="$estimates/yogo2006/published-check.json"
+[ -f "$yogo_check" ] || Rscript paper/applications/yogo2006/check_published.R "$raw/yogo_2006" "$yogo_input" "$yogo_check"
 
 run_application() {
   app=$1; input=$2; version=$3; rtol=${4:-1e-8}
@@ -59,7 +66,11 @@ run_application() {
   if [ -x python/.venv/bin/python ] && [ ! -f "$run-python/results.csv" ]; then
     python/.venv/bin/python -W ignore -m speccurve run "paper/applications/$app/menu.json" "$input" "$run-python" --no-plot
   fi
-  if [ -f "$run-python/results.csv" ]; then
+  if [ -f "$run-python/results.csv" ] && [ "$rtol" = summary ]; then
+    # Nonlinear searches: report agreement shares; fail only on a gross mismatch.
+    python3 tools/compare_implementations.py "$run/results.csv" "$run-python/results.csv" --summary \
+      --close-tol 1e-4 --min-status 0.95 --min-close 0.9
+  elif [ -f "$run-python/results.csv" ]; then
     python3 tools/compare_implementations.py "$run/results.csv" "$run-python/results.csv" --rtol "$rtol"
   fi
 }
@@ -72,6 +83,8 @@ run_application btmr2021 "$btmr_input" btmr-v1
 run_application fi2015 "$fi_input" fi-v1
 run_application cfr2010 "$cfr_input" cfr-v1 1e-6
 run_application bp2005 "$bp_input" bp-v1 1e-7
+# Structural example (GMM): about 5 hours in R and 2 in Python, single-threaded.
+run_application yogo2006 "$yogo_input" yogo-v1 summary
 
 Rscript paper/figures/make_figures.R "$estimates" "$work/figures"
 Rscript paper/figures/supplement_tables.R "$estimates" "$work/tables"

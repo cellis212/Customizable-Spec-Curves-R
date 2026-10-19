@@ -17,10 +17,10 @@ This repository contains the code for *Specification Curves in Empirical Finance
 | Language | Engine | Status |
 |---|---|---|
 | R (reference) | `paper/R/`, `paper/run.R` (fixest) | Tested; reference for all applications |
-| Python | `python/speccurve/` (PyFixest) | Tested; agrees with R on all 2,594 application specifications (1e-8 to 1e-6 relative) |
+| Python | `python/speccurve/` (PyFixest) | Tested; agrees with R on all 2,594 regression and mean specifications (1e-8 to 1e-6 relative); for the 1,440 GMM specifications, same status in 1,396 and estimates within 1e-4 standard errors in 478 of the 500 that converge in both |
 | Stata | `stata/speccurve_run.do` (reghdfe), runs a plan exported by R | Provided; not yet run against R |
 
-Supported estimators: linear models with any number of fixed effects (clustered, heteroskedasticity-robust, or i.i.d. errors; optional unit-specific linear trends) and means of a single time series such as a long-short portfolio return (i.i.d. or Newey-West errors). Joint specification-curve inference, multiway clustering, and nonlinear or heterogeneity-robust staggered-adoption estimators are not implemented; treat them as separate analyses.
+Supported estimators: linear models with any number of fixed effects (clustered, heteroskedasticity-robust, or i.i.d. errors; optional weights and unit-specific linear trends), two-stage least squares with fixed effects (effective first-stage F in every row), means of a single time series such as a long-short portfolio return (i.i.d. or Newey-West errors), and GMM on a single time series with application-supplied moment functions (identity, two-step, iterated, or continuously updated weighting; VARHAC or Newey-West long-run covariances; bounds; multistart; J statistic, convergence code, and bound hits in every row; R and Python only). Joint specification-curve inference, multiway clustering, identification-robust GMM inference, and heterogeneity-robust staggered-adoption estimators are not implemented; treat them as separate analyses.
 
 ### Commands
 
@@ -52,6 +52,7 @@ Design examples in the Supplementary Material:
 - [`paper/applications/fi2015`](paper/applications/fi2015/): staggered adoption. Favara and Imbs (2015), interstate branching deregulation and mortgage credit, with leave-one-cohort-out choices and a placebo lender panel (432 specifications).
 - [`paper/applications/cfr2010`](paper/applications/cfr2010/): regression discontinuity. Cellini, Ferreira and Rothstein (2010), school bond referenda, varying bandwidth, kernel, polynomial, donut, and threshold (336 specifications).
 - [`paper/applications/bp2005`](paper/applications/bp2005/): instrumental variables. Burgess and Pande (2005), rural bank branches and poverty, varying instruments and states with the effective first-stage F reported for every specification (1,224 specifications).
+- [`paper/applications/yogo2006`](paper/applications/yogo2006/): structural estimation by GMM. Yogo (2006), durable consumption and expected stock returns, varying test assets, moment blocks, weighting, starting values and search, the long-run covariance, timing, and sample, with failed searches kept (1,440 specifications).
 
 Each folder documents where to download the public data (not redistributed here), the expected SHA-256 hashes, and the frozen menu. `sh paper/reproduce.sh RAW_DIR WORK_DIR` rebuilds the inputs, estimates the curves, cross-checks R against Python, draws the figures and tables used in the paper, and writes the searchable explorer of every specification.
 

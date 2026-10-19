@@ -139,5 +139,48 @@ numbers$bp <- list(branches = c(describe(branches), list(rank_from_most_negative
                             function(r) list(estimate = r$estimate, first_stage_f = r$first_stage_f)))),
   credit_weak = sum(bp$first_stage_f[bp$bank_measure == "credit"] < 10),
   savings_weak = sum(bp$first_stage_f[bp$bank_measure == "savings"] < 10))
+# Structural example: failed rows are kept, so read them all and summarise the
+# converged ones.
+yogo_app <- Filter(function(a) identical(a$id, "yogo2006"), apps)[[1L]]
+yogo <- utils::read.csv(file.path(args[1L], "yogo2006", paste0("run-", yogo_app$manifest_version), "results.csv"),
+                        stringsAsFactors = FALSE)
+yogo_ok <- yogo[yogo$status == "ok", ]
+tested <- function(x) x[is.finite(x$j_p_value), ]
+gmm_summary <- function(g) {
+  ok <- g[g$status == "ok", ]
+  list(n = nrow(g), n_ok = nrow(ok), median = if (nrow(ok)) stats::median(ok$estimate) else NULL,
+       min = if (nrow(ok)) min(ok$estimate) else NULL, max = if (nrow(ok)) max(ok$estimate) else NULL,
+       n_below_10 = sum(ok$estimate < 10), n_above_100 = sum(ok$estimate > 100), n_j_tested = nrow(tested(ok)),
+       n_j_reject = sum(tested(ok)$j_p_value < 0.05), n_bound = sum(nzchar(ok$bound_hits)))
+}
+yogo_pick <- function(...) {
+  a <- list(...)
+  keep <- rep(TRUE, nrow(yogo))
+  for (k in names(a)) keep <- keep & yogo[[k]] == a[[k]]
+  yogo[keep, ]
+}
+row_numbers <- function(r) list(status = r$status, error = r$error, estimate = r$estimate, se = r$std_error,
+                                sigma = r$theta_sigma, rho = r$theta_rho, alpha = r$theta_alpha, beta = r$theta_beta,
+                                j = r$j_stat, j_p = r$j_p_value, bound = r$bound_hits, convergence = r$convergence,
+                                share_best = r$start_share_best, focal_range = r$start_focal_range)
+published <- yogo[yogo$preferred, ]
+fixed <- c(moment_blocks = "all", hac = "varhac", timing = "beginning", sample = "full")
+numbers$yogo <- c(gmm_summary(yogo), list(
+  failures = as.list(table(sub(" \\(.*$", "", yogo$error[yogo$status == "failed"]))),
+  failure_codes = as.list(table(yogo$convergence[yogo$status == "failed"], useNA = "ifany")),
+  published = row_numbers(published),
+  published_rank_from_top = sum(yogo_ok$estimate > published$estimate) + 1L,
+  originals = lapply(split(yogo[yogo$original & !yogo$preferred, ], yogo$test_assets[yogo$original & !yogo$preferred]), row_numbers),
+  # Yogo's other choices, each search and weighting (Borri and Ragusa's Panel A is two-step with a global search).
+  search_by_weighting = lapply(stats::setNames(nm = unique(yogo$test_assets)), function(a)
+    lapply(stats::setNames(nm = unique(yogo$search)), function(sr) lapply(stats::setNames(nm = unique(yogo$weighting)), function(w) {
+      r <- do.call(yogo_pick, c(list(test_assets = a, search = sr, weighting = w), as.list(fixed)))
+      if (nrow(r)) row_numbers(r) else NULL
+    }))),
+  by = lapply(stats::setNames(nm = c("test_assets", "moment_blocks", "weighting", "search", "hac", "timing", "sample")),
+              function(d) lapply(split(yogo, yogo[[d]]), gmm_summary)),
+  search_weighting = lapply(split(yogo, paste(yogo$search, yogo$weighting)), gmm_summary),
+  multistart_share_best = if (any(yogo_ok$search == "multistart"))
+    stats::quantile(yogo_ok$start_share_best[yogo_ok$search == "multistart"], c(0, 0.25, 0.5, 0.75, 1)) else NULL))
 jsonlite::write_json(numbers, args[2L], pretty = TRUE, auto_unbox = TRUE, digits = 6)
 cat("Wrote", args[2L], "\n")

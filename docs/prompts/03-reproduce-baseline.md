@@ -9,4 +9,9 @@ Propose a numerical tolerance and explain it (e.g., rounding in the published ta
 If the estimate does not reproduce within tolerance, stop and list likely causes
 (sample, definitions, data vintage). Do not change the menu to force agreement.
 If it reproduces, fill menu.json "reference" with estimate, std_error, tolerance, source.
+For a structural (gmm) application, first evaluate the moment functions at the published
+parameter values and reproduce the published J statistic and standard errors (no
+optimizer), then reproduce the estimate with the preferred row. If the original code's
+optimizer failed or its output cannot be rebuilt, stop and agree the target with the
+researcher before estimating anything.
 ```

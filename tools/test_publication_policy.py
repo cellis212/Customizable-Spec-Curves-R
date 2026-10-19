@@ -14,7 +14,9 @@ class PublicationPolicyTests(unittest.TestCase):
                      "paper/applications/bll2010/menu.json",
                      "paper/applications/cz_am/build_input.R", "docs/ai-guide.md", "docs/prompts/01-design-menu.md",
                      "python/speccurve/engine.py", "python/tests/test_engine.py", "stata/speccurve_run.do",
-                     "paper/figures/make_figures.R", "tools/compare_implementations.py"]:
+                     "paper/figures/make_figures.R", "tools/compare_implementations.py",
+                     "paper/applications/yogo2006/moments.R", "paper/applications/yogo2006/moments.py",
+                     "paper/applications/yogo2006/check_published.R"]:
             self.assertTrue(allowed_path(path), path)
 
     def test_data_and_internal_records_fail_closed(self):
@@ -27,7 +29,9 @@ class PublicationPolicyTests(unittest.TestCase):
                      "paper/manuscript/generated/table_menu_bll.tex", "python/.venv/bin/python",
                      "paper/manuscript/paper.qmd", "paper/manuscript/references.bib",
                      "paper/manuscript/sections/05_applications.qmd", "manuscript/paper.qmd",
-                     "paper/scripts/word_count.py", "docs/supplement.md", "paper/highlights.md"]:
+                     "paper/scripts/word_count.py", "docs/supplement.md", "paper/highlights.md",
+                     "paper/applications/yogo2006/CBased_Data.xls", "paper/applications/yogo2006/nlest_dur.fmt",
+                     "paper/applications/yogo2006/moments.csv"]:
             self.assertFalse(allowed_path(path), path)
 
     def test_forced_staging_cannot_allow_data(self):

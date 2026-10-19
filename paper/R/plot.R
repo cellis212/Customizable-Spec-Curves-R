@@ -47,7 +47,8 @@ plot_curve <- function(manifest, results, directory, file_stem = "specification_
   validation <- validate_results(manifest, results)
   abort_if(!validation$passed, "Plotting is blocked because specifications failed.")
   menu <- manifest$menu
-  results <- order_results(manifest, results)
+  # Failed rows (allowed only when the menu declares them) are reported, not drawn.
+  results <- order_results(manifest, results[results$status == "ok", , drop = FALSE])
   n_max <- max(table(results$facet))
   point_size <- if (n_max > 150) 0.9 else if (n_max > 60) 1.4 else 2.2
   baseline <- results[results$preferred, c("facet", "estimate")]
