@@ -12,6 +12,7 @@ restore:
 check:
 	python3 -m unittest discover -s tools -p 'test_*.py'
 	Rscript paper/tests/test_curve.R
+	Rscript paper/tests/test_explorer.R
 	$(PYTHON) -m unittest discover -s python/tests
 	python3 tools/publication_policy.py
 

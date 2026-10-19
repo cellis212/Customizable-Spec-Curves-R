@@ -168,6 +168,14 @@ Avoid: "X% of specifications are significant, so the result is robust" (a menu d
 
 > We estimate N specifications that cross [dimensions]. The published estimate of [b] lies at the [p]th percentile of the curve (median [m], range [lo] to [hi], in [units]). All/most/some estimates are [sign]; [k] of N pointwise 95% intervals exclude zero. The main source of dispersion is [decision]: specifications that [choice] produce estimates [higher/lower] by about [amount]. [One sentence on economic magnitude.] Intervals are pointwise and the summaries describe the stated menu; we do not report joint inference.
 
+**Online appendix.** A figure shows the curve; readers and referees also need every row. After validation, write a searchable explorer of all specifications:
+
+```sh
+Rscript paper/figures/make_explorer.R appendix.html manifest.json run-001 [manifest-2.json run-002 ...] --title "Online appendix"
+```
+
+The output is one self-contained HTML file: data, styles, and code are inline, so it needs no server, internet connection, or software beyond a web browser, and it can be posted beside the article, deposited with the replication package, or hosted on a personal site. Readers can search every specification by any text (an option, a variable, a sample filter, a specification ID), filter by each decision, see the selection highlighted on the full curve or re-ranked on its own, compare median estimates across options, open any specification for its choices and their justifications, formula, sample sizes, observation hash, and failure message, and download the selected rows as CSV. The page address records the current view, so a link can send readers to one subset (for example, only the region-by-year specifications). For a Python run, pass its `menu.json` instead of a manifest; the run's `grid.csv` is then used to check completeness. The script refuses results that lack a frozen row or that came from a different manifest. Regenerate the file after any change instead of editing it by hand, and tell the researcher where it was written; posting it is the researcher's decision.
+
 ## 9. Troubleshooting
 
 | Message | Meaning and fix |

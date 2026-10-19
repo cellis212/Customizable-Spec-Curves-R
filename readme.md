@@ -12,6 +12,7 @@ This repository contains the code for *Specification Curves in Empirical Finance
 2. `validate` checks the menu against the data without estimating anything.
 3. `freeze` writes the full grid with hashes of the data and analysis code. `estimate` refuses to run if any of them changed, keeps every specification (failures included), refuses to draw figures unless the published baseline reproduces, and records sample identities and counts.
 4. A second implementation can be compared row by row with `tools/compare_implementations.py`.
+5. `paper/figures/make_explorer.R` writes every specification into one self-contained HTML page for an online appendix: readers can search and filter all specifications, see any selection against the full curve, open each specification's details, download rows as CSV, and link to a particular view. The page needs only a web browser.
 
 | Language | Engine | Status |
 |---|---|---|
@@ -36,6 +37,7 @@ Rscript paper/run.R estimate MANIFEST.json INPUT.csv RUN_DIR
 Rscript paper/run.R plan     MANIFEST.json INPUT.csv PLAN.csv     # for Stata
 python -m speccurve run MENU.json INPUT.csv RUN_DIR
 python3 tools/compare_implementations.py RUN_DIR/results.csv OTHER_RUN/results.csv
+Rscript paper/figures/make_explorer.R APPENDIX.html MANIFEST.json RUN_DIR  # searchable HTML of every specification
 ```
 
 ### The paper's applications
@@ -51,7 +53,7 @@ Design examples in the Supplementary Material:
 - [`paper/applications/cfr2010`](paper/applications/cfr2010/): regression discontinuity. Cellini, Ferreira and Rothstein (2010), school bond referenda, varying bandwidth, kernel, polynomial, donut, and threshold (336 specifications).
 - [`paper/applications/bp2005`](paper/applications/bp2005/): instrumental variables. Burgess and Pande (2005), rural bank branches and poverty, varying instruments and states with the effective first-stage F reported for every specification (1,224 specifications).
 
-Each folder documents where to download the public data (not redistributed here), the expected SHA-256 hashes, and the frozen menu. `sh paper/reproduce.sh RAW_DIR WORK_DIR` rebuilds the inputs, estimates the curves, cross-checks R against Python, and draws the figures and tables used in the paper.
+Each folder documents where to download the public data (not redistributed here), the expected SHA-256 hashes, and the frozen menu. `sh paper/reproduce.sh RAW_DIR WORK_DIR` rebuilds the inputs, estimates the curves, cross-checks R against Python, draws the figures and tables used in the paper, and writes the searchable explorer of every specification.
 
 R 4.5.1 with the packages in `renv.lock` and Python 3.11 with `python/pyproject.toml` were used. Data, generated outputs, and the manuscript stay outside version control: a deny-by-default `.gitignore` and commit/push checks allow only source code, menus, and documentation.
 

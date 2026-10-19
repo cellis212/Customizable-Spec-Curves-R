@@ -15,7 +15,8 @@
 #   bp_2005/june05_data_burgess.zip      AEA package for Burgess and Pande (2005)
 #   cfr_2010/recursivepanel.dta.zip      Cellini, Ferreira and Rothstein (2010) archive
 #   (see each paper/applications/<id>/README.md for sources and hashes)
-# WORK_DIR receives processed inputs, frozen manifests, runs, figures, and tables.
+# WORK_DIR receives processed inputs, frozen manifests, runs, figures, tables, and
+# explorer/specification_explorer.html, a searchable page with every specification.
 # MANUSCRIPT_DIR (optional) is a LaTeX manuscript kept outside this repository;
 # if given, figures and tables are copied into its figures/ and tables/ folders.
 # Existing manifests and runs are reused, never overwritten: a frozen grid is
@@ -75,6 +76,9 @@ run_application bp2005 "$bp_input" bp-v1 1e-7
 Rscript paper/figures/make_figures.R "$estimates" "$work/figures"
 Rscript paper/figures/supplement_tables.R "$estimates" "$work/tables"
 Rscript paper/figures/paper_numbers.R "$estimates" "$work/tables/paper_numbers.json"
+# One self-contained HTML page with every specification of every application, for an online appendix.
+Rscript paper/figures/make_explorer.R "$work/explorer/specification_explorer.html" --applications "$estimates" \
+  --title "Specification Curves in Empirical Finance: every specification"
 
 if [ $# -ge 3 ]; then
   manuscript=$3
@@ -83,4 +87,4 @@ if [ $# -ge 3 ]; then
   cp "$work"/tables/table_*.tex "$manuscript/tables/"
   echo "Copied figures and tables into $manuscript"
 fi
-echo "Figures and tables: $work/figures, $work/tables"
+echo "Figures and tables: $work/figures, $work/tables; explorer: $work/explorer/specification_explorer.html"
